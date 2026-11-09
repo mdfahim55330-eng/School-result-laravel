@@ -12,6 +12,10 @@ use PhpOffice\\PhpSpreadsheet\\IOFactory;
 use PhpOffice\\PhpSpreadsheet\\Spreadsheet;
 use PhpOffice\\PhpSpreadsheet\\Writer\\Xlsx;
 use Barryvdh\\DomPDF\\Facade\\Pdf;
+use BaconQrCode\\Renderer\\ImageRenderer;
+use BaconQrCode\\Renderer\\Image\\SvgImageBackEnd;
+use BaconQrCode\\Renderer\\RendererStyle\\RendererStyle;
+use BaconQrCode\\Writer;
 
 class ApiController
 {
@@ -28,6 +32,16 @@ class ApiController
     private function ok(string $message='OK',array $extra=[]){return response()->json(array_merge(['success'=>true,'message'=>$message],$extra));}
     private function fail(string $message,int $status=400){return response()->json(['success'=>false,'message'=>$message],$status);}
     private function school(): array { return ['name'=>env('SCHOOL_NAME','Shaheed Nur Hossain Memorial School'),'address'=>env('SCHOOL_ADDRESS','Biral, Dinajpur'),'eiin'=>env('SCHOOL_EIIN','')]; }
+    private function verifyUrl($id): string {
+        $secret = env('VERIFY_SECRET', config('app.key'));
+        $sig = hash_hmac('sha256', (string)$id, (string)$secret);
+        return URL::to('/verify/'.$id.'/'.$sig);
+    }
+    private function qrData(string $url): string {
+        $renderer = new ImageRenderer(new RendererStyle(180), new SvgImageBackEnd());
+        $svg = (new Writer($renderer))->writeString($url);
+        return 'data:image/svg+xml;base64,'.base64_encode($svg);
+    }
 
     // Authentication
     public function me(Request $r) {
@@ -180,12 +194,12 @@ class ApiController
         $v=$r->validate(['roll'=>'required|string|max:50','class_name'=>'required|string|max:50','exam_name'=>'required|string|max:150','exam_year'=>'required|integer']);
         $rows=DB::table('students')->where($v)->where('status','published')->get();if(!$rows->count())return null;if($rows->count()>1)return false;return $rows->first();
     }
-    public function publicSearch(Request $r) {$s=$this->findPublished($r);if($s===false)return $this->fail('More than one result was found for this roll. Please contact the school office.',409);if(!$s)return $this->fail('Result not found or result has not been published.',404);return response()->json(['success'=>true]+$this->resultData($s));}
-    public function publicPdf(Request $r) {$s=$this->findPublished($r);if(!$s)return $this->fail('Result not found or result has not been published.',404);$d=$this->resultData($s);$html=view('marksheet-pdf',$d)->render();return Pdf::loadHTML($html)->setPaper('a4')->stream('marksheet-'.$s->roll.'-'.$s->exam_year.'.pdf');}
-    public function classPdf(Request $r) {$d=$this->report($r);$items=array_values(array_filter($d['students'],fn($s)=>$r->query('status','published')==='all'||$s['status']==='published'));if(!$items)return $this->fail('No published results found for this selection.',404);$pages=[];foreach($items as $item){$s=DB::table('students')->where('id',$item['id'])->first();$pages[]=$this->resultData($s);}return Pdf::loadView('class-marksheets',['pages'=>$pages])->setPaper('a4')->stream('class-marksheets.pdf');}
+    public function publicSearch(Request $r) { $s=$this->findPublished($r); if($s===false)return $this->fail('More than one result was found for this roll. Please contact the school office.',409); if(!$s)return $this->fail('Result not found or result has not been published.',404); $data=$this->resultData($s); $data['verify_url']=$this->verifyUrl($s->id); $data['qr']=$this->qrData($data['verify_url']); return response()->json(['success'=>true]+$data); }
+    public function publicPdf(Request $r) { $s=$this->findPublished($r); if(!$s)return $this->fail('Result not found or result has not been published.',404); $d=$this->resultData($s); $d['verify_url']=$this->verifyUrl($s->id); $d['qr']=$this->qrData($d['verify_url']); return Pdf::loadView('marksheet-pdf',$d)->setPaper('a4')->stream('marksheet-'.$s->roll.'-'.$s->exam_year.'.pdf'); }
+    public function classPdf(Request $r) { $d=$this->report($r); $items=array_values(array_filter($d['students'],fn($s)=>$r->query('status','published')==='all'||$s['status']==='published')); if(!$items)return $this->fail('No published results found for this selection.',404); if(count($items)>600)return $this->fail('Too many students for one PDF. Please choose a smaller group.'); $pages=[]; foreach($items as $item){$s=DB::table('students')->where('id',$item['id'])->first();$page=$this->resultData($s);$page['verify_url']=$this->verifyUrl($s->id);$page['qr']=$this->qrData($page['verify_url']);$pages[]=$page;} return Pdf::loadView('class-marksheets',['pages'=>$pages])->setPaper('a4')->stream('class-marksheets.pdf'); }
 
     // Users and audit
-    public function users() {return response()->json(['success'=>true,'users'=>DB::table('admins')->select('id','username','role','active','must_change_password','last_login','created_at')->orderBy('id')->get()]);}
+    public function users(Request $r) { if($x=$this->admin($r))return $x; return response()->json(['success'=>true,'users'=>DB::table('admins')->select('id','username','role','active','must_change_password','last_login','created_at')->orderBy('id')->get()]); }
     public function storeUser(Request $r) {
         if($x=$this->admin($r))return $x;$v=$r->validate(['username'=>'required|string|regex:/^[A-Za-z0-9._-]{3,50}$/','password'=>'required|string|min:8|max:200','role'=>'required|in:admin,teacher']);
         if(strtolower($v['password'])===strtolower($v['username']))return $this->fail('The password must not be the same as the username.');if(DB::table('admins')->whereRaw('LOWER(username)=?', [strtolower($v['username'])])->exists())return $this->fail('This username is already taken.');
@@ -198,7 +212,7 @@ class ApiController
         DB::table('admins')->where('id',$id)->update(['role'=>$role,'active'=>$active,'updated_at'=>now()]);$this->audit($r,'user_updated','admin',$id,'Updated account '.$target->username);return $this->ok('User updated.');
     }
     public function resetPassword(Request $r,$id) {if($x=$this->admin($r))return $x;$v=$r->validate(['new_password'=>'required|string|min:8|max:200']);$u=DB::table('admins')->where('id',$id)->first();if(!$u)return $this->fail('User not found.',404);if(strtolower($v['new_password'])===strtolower($u->username))return $this->fail('The password must not be the same as the username.');DB::table('admins')->where('id',$id)->update(['password'=>Hash::make($v['new_password']),'must_change_password'=>true,'updated_at'=>now()]);$this->audit($r,'password_reset','admin',$id,'Reset password for '.$u->username);return $this->ok('Password reset. The user must choose a new one at next login.');}
-    public function auditLog(Request $r) {$limit=min(200,max(1,(int)$r->query('limit',50)));$offset=max(0,(int)$r->query('offset',0));$q=DB::table('audit_log');if($r->filled('action'))$q->where('action',$r->query('action'));if($r->filled('q'))$q->where(fn($w)=>$w->where('summary','like','%'.$r->query('q').'%')->orWhere('username','like','%'.$r->query('q').'%'));$total=(clone $q)->count();$logs=$q->orderByDesc('id')->offset($offset)->limit($limit)->get();$actions=DB::table('audit_log')->distinct()->orderBy('action')->pluck('action');return response()->json(['success'=>true,'total'=>$total,'logs'=>$logs,'actions'=>$actions]);}
+    public function auditLog(Request $r) { if($x=$this->admin($r))return $x; $limit=min(200,max(1,(int)$r->query('limit',50)));$offset=max(0,(int)$r->query('offset',0));$q=DB::table('audit_log');if($r->filled('action'))$q->where('action',$r->query('action'));if($r->filled('q'))$q->where(fn($w)=>$w->where('summary','like','%'.$r->query('q').'%')->orWhere('username','like','%'.$r->query('q').'%'));$total=(clone $q)->count();$logs=$q->orderByDesc('id')->offset($offset)->limit($limit)->get();$actions=DB::table('audit_log')->distinct()->orderBy('action')->pluck('action');return response()->json(['success'=>true,'total'=>$total,'logs'=>$logs,'actions'=>$actions]);}
 
     // Excel bulk upload
     private function readExcel($file): array {
@@ -238,8 +252,16 @@ class ApiController
     }
 
     // Export and backup
-    public function exportCsv(Request $r) {$d=$this->report($r);$head=['Position','Roll','Name','Registration','Group'];foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';array_push($head,'Total Marks','GPA','Grade','Result','Status');$rows=[$head];foreach($d['students'] as $s){$x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';array_push($x,$s['total_marks'],number_format($s['final_gpa'],2),$s['final_grade'],$s['result_status'],$s['status']);$rows[]=$x;}$csv="\\xEF\\xBB\\xBF";foreach($rows as $row)$csv.=implode(',',array_map(fn($v)=>'"'.str_replace('"','""',(string)$v).'"',$row))."\\r\\n";$this->audit($r,'export','exam',null,'Exported CSV');return response($csv,200,['Content-Type'=>'text/csv; charset=utf-8','Content-Disposition'=>'attachment; filename="results.csv"']);}
-    public function exportXlsx(Request $r) {$d=$this->report($r);$book=new Spreadsheet();$ws=$book->getActiveSheet();$head=['Position','Roll','Name','Registration','Group'];foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';array_push($head,'Total Marks','GPA','Grade','Result','Status');$ws->fromArray($head,null,'A1');foreach($d['students'] as $s){$x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';array_push($x,$s['total_marks'],$s['final_gpa'],$s['final_grade'],$s['result_status'],$s['status']);$ws->fromArray($x,null,'A'.($ws->getHighestRow()+1));}$ws->getStyle('1:1')->getFont()->setBold(true);$ws->freezePane('D2');$tmp=tempnam(sys_get_temp_dir(),'xlsx');(new Xlsx($book))->save($tmp);$this->audit($r,'export','exam',null,'Exported Excel');return response()->download($tmp,'results.xlsx')->deleteFileAfterSend(true);}
+    public function exportCsv(Request $r) { if($x=$this->admin($r))return $x; $d=$this->report($r);$head=['Position','Roll','Name','Registration','Group'];foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';array_push($head,'Total Marks','GPA','Grade','Result','Status');$rows=[$head];foreach($d['students'] as $s){$x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';array_push($x,$s['total_marks'],number_format($s['final_gpa'],2),$s['final_grade'],$s['result_status'],$s['status']);$rows[]=$x;}$csv="\\xEF\\xBB\\xBF";foreach($rows as $row)$csv.=implode(',',array_map(fn($v)=>'"'.str_replace('"','""',(string)$v).'"',$row))."\\r\\n";$this->audit($r,'export','exam',null,'Exported CSV');return response($csv,200,['Content-Type'=>'text/csv; charset=utf-8','Content-Disposition'=>'attachment; filename="results.csv"']);}
+    public function exportXlsx(Request $r) { if($x=$this->admin($r))return $x; $d=$this->report($r);$book=new Spreadsheet();$ws=$book->getActiveSheet();$head=['Position','Roll','Name','Registration','Group'];foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';array_push($head,'Total Marks','GPA','Grade','Result','Status');$ws->fromArray($head,null,'A1');foreach($d['students'] as $s){$x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';array_push($x,$s['total_marks'],$s['final_gpa'],$s['final_grade'],$s['result_status'],$s['status']);$ws->fromArray($x,null,'A'.($ws->getHighestRow()+1));}$ws->getStyle('1:1')->getFont()->setBold(true);$ws->freezePane('D2');$tmp=tempnam(sys_get_temp_dir(),'xlsx');(new Xlsx($book))->save($tmp);$this->audit($r,'export','exam',null,'Exported Excel');return response()->download($tmp,'results.xlsx')->deleteFileAfterSend(true);}
     public function backup(Request $r) {if($x=$this->admin($r))return $x;$data=['app'=>'school-result-system','version'=>2,'created_at'=>now()->toIso8601String()];foreach(['exams','subjects','students','results'] as $t)$data[$t]=DB::table($t)->orderBy('id')->get();$data['counts']=array_map(fn($t)=>count($data[$t]),['exams','subjects','students','results']);$this->audit($r,'backup','system',null,'Downloaded backup');return response()->json($data)->header('Content-Disposition','attachment; filename="result-backup-'.now()->format('Y-m-d').'.json"');}
+    public function verifyResult($id,$sig) {
+        $expected=hash_hmac('sha256',(string)$id,(string)env('VERIFY_SECRET',config('app.key')));
+        if(!ctype_digit((string)$id)||!hash_equals($expected,(string)$sig)) return response('<h2>Verification link is not valid.</h2>',404)->header('Content-Type','text/html');
+        $s=DB::table('students')->where('id',$id)->where('status','published')->first();
+        if(!$s) return response('<h2>This result is not available or has been withdrawn.</h2>',404)->header('Content-Type','text/html');
+        $d=$this->resultData($s);
+        return response()->view('verify-result',['data'=>$d],200)->header('X-Robots-Tag','noindex');
+    }
     public function health() {try{DB::select('SELECT 1');return response()->json(['ok'=>true]);}catch(\\Throwable $e){return response()->json(['ok'=>false],503);}}
 }
