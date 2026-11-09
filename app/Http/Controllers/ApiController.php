@@ -220,18 +220,36 @@ class ApiController
         $headers=array_map(fn($x)=>trim((string)$x),array_shift($rows));$out=[];foreach($rows as $index=>$row){$x=['__row'=>$index+2];foreach($headers as $col=>$name)if($name!=='')$x[$name]=$row[$col]??null;if(array_filter($x,fn($v,$k)=>$k!=='__row'&&$v!==null&&$v!=='',ARRAY_FILTER_USE_BOTH))$out[]=$x;}
         return ['columns'=>array_values(array_filter($headers)),'rows'=>$out];
     }
+    private function normalizeDigits($value): string {
+        return strtr((string)$value, ['০'=>'0','১'=>'1','২'=>'2','৩'=>'3','৪'=>'4','৫'=>'5','৬'=>'6','৭'=>'7','৮'=>'8','৯'=>'9']);
+    }
     private function excelRows($file,$exam,$mode='skip',$lockPublished=false): array {
-        $sheet=$this->readExcel($file);$subs=$this->subjectsFor($exam->class_name);$out=[];$created=0;$updated=0;$failed=0;
-        foreach($sheet['rows'] as $row){$name=$row['Name']??$row['Student Name']??'';$roll=trim((string)($row['Roll']??$row['Roll No']??''));$errs=[];$marks=[];
-            if(trim((string)$name)==='')$errs[]='Student name is required.';if($roll==='')$errs[]='Roll is required.';
-            foreach($subs as $s){$value=$row[$s->subject_code]??$row[$s->subject_name]??null;if($value===''||$value===null){if($s->subject_type!=='fourth')$errs[]=$s->subject_name.' marks are required.';continue;}$marks[]=['subject_id'=>$s->id,'marks'=>$value];}
+        $sheet=$this->readExcel($file); $subs=$this->subjectsFor($exam->class_name); $out=[];
+        foreach($sheet['rows'] as $row) {
+            $name=trim((string)($row['Name']??$row['Student Name']??''));
+            $roll=trim($this->normalizeDigits($row['Roll']??$row['Roll No']??''));
+            $errs=[]; $marks=[];
+            if($name==='') $errs[]='Student name is required.';
+            if($roll==='') $errs[]='Roll is required.';
+            foreach($subs as $s) {
+                $value=$row[$s->subject_code]??$row[$s->subject_name]??null;
+                if($value===''||$value===null) { if($s->subject_type!=='fourth') $errs[]=$s->subject_name.' marks are required.'; continue; }
+                $marks[]=['subject_id'=>$s->id,'marks'=>$this->normalizeDigits($value)];
+            }
             $old=DB::table('students')->where(['class_name'=>$exam->class_name,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'roll'=>$roll])->first();
-            if($old&&$mode!=='update')$errs[]='Duplicate roll already exists.'; if($old&&$lockPublished&&$old->status==='published')$errs[]='Published results can only be updated by an admin.';
-            try{$graded=$marks?GradingService::process($subs,$marks):null;}catch(\\Throwable $e){$errs[]=$e->getMessage();$graded=null;}
-            $valid=!$errs&&$graded;$out[]=['row'=>$row['__row'],'name'=>$name,'roll'=>$roll,'valid'=>(bool)$valid,'state'=>$old?'update':'create','errors'=>$errs,'gpa'=>$graded['final']['gpa']??null,'grade'=>$graded['final']['grade']??null,'result'=>$graded['final']['status']??null,'marks'=>$graded['rows']??[],'existing_id'=>$old->id??null,'registration'=>$row['Registration']??'','group_name'=>$row['Group']??''];
-            if($valid){if($old)$updated++;else$created++;}else$failed++;
+            $state=$old ? (($mode==='update' && !($lockPublished && $old->status==='published'))?'update':'skip') : 'create';
+            if($old && $mode!=='update') $errs[]='Duplicate roll already exists.';
+            if($old && $lockPublished && $old->status==='published') $errs[]='Published results can only be updated by an admin.';
+            try { $graded=$marks?GradingService::process($subs,$marks):null; }
+            catch(\\Throwable $e) { $errs[]=$e->getMessage(); $graded=null; }
+            $valid=!$errs && $graded;
+            $out[]=['row'=>$row['__row'],'name'=>$name,'roll'=>$roll,'valid'=>(bool)$valid,'state'=>$state,'errors'=>$errs,'gpa'=>$graded['final']['gpa']??null,'grade'=>$graded['final']['grade']??null,'result'=>$graded['final']['status']??null,'marks'=>$graded['rows']??[],'existing_id'=>$old->id??null,'registration'=>$row['Registration']??'','group_name'=>$row['Group']??''];
         }
-        return ['sheet'=>$sheet,'rows'=>$out,'counts'=>['total'=>count($out),'valid'=>count($out)-$failed,'invalid'=>$failed,'create'=>$created,'update'=>$updated]];
+        $new=count(array_filter($out,fn($x)=>$x['valid'] && $x['state']==='create'));
+        $update=count(array_filter($out,fn($x)=>$x['valid'] && $x['state']==='update'));
+        $skipped=count(array_filter($out,fn($x)=>$x['state']==='skip'));
+        $invalid=count(array_filter($out,fn($x)=>!$x['valid'] && $x['state']!=='skip'));
+        return ['sheet'=>$sheet,'rows'=>$out,'counts'=>['total'=>count($out),'new'=>$new,'update'=>$update,'skipped'=>$skipped,'invalid'=>$invalid,'valid'=>$new+$update,'create'=>$new]];
     }
     public function bulkPreview(Request $r) {
         $r->validate(['excelFile'=>'required|file|mimes:xlsx|max:5120']);$file=$r->file('excelFile');$examId=(int)$r->input('exam_id');
