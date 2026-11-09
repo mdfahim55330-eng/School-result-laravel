@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Marksheet</title>
+    <link rel="icon" href="/6716-removebg-preview.png">
+    <link rel="stylesheet" href="/css/app.css">
+    <style>
+        @page { size: A4 portrait; margin: 0; }
+
+        @media print {
+            html, body {
+                width: 210mm !important;
+                min-width: 210mm !important;
+                height: 297mm !important;
+                min-height: 297mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+                overflow: hidden !important;
+            }
+
+            body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            #error {
+                display: none !important;
+            }
+
+            #sheet {
+                box-sizing: border-box !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: flex-start !important;
+                width: 193mm !important;
+                height: 280mm !important;
+                min-height: 280mm !important;
+                max-width: none !important;
+                margin: 8.5mm auto !important;
+                padding: 14mm !important;
+                overflow: hidden !important;
+                box-shadow: none !important;
+                break-inside: avoid-page !important;
+                page-break-inside: avoid !important;
+                transform-origin: top center !important;
+            }
+
+            #sheet > header,
+            #sheet > .my-4,
+            #sheet > #info,
+            #sheet > .mt-5,
+            #sheet > #summary {
+                flex-shrink: 0 !important;
+            }
+
+            #sheet > footer {
+                flex-shrink: 0 !important;
+                margin-top: auto !important;
+            }
+
+            #sheet > p.mt-6 {
+                flex-shrink: 0 !important;
+            }
+
+            /* Keep the printable table/summary visually close to the PDF version. */
+            #sheet table {
+                table-layout: fixed !important;
+                width: 100% !important;
+            }
+
+            #sheet th,
+            #sheet td {
+                padding: 0.45rem 0.55rem !important;
+                line-height: 1.2 !important;
+            }
+
+            #sheet thead th,
+            #sheet tbody td {
+                border-width: 1px !important;
+            }
+
+            body.print-compact #sheet {
+                padding: 10mm !important;
+            }
+
+            body.print-compact #sheet > .my-4 {
+                margin-top: 5px !important;
+                margin-bottom: 5px !important;
+            }
+
+            body.print-compact #sheet > #info {
+                row-gap: 2px !important;
+            }
+
+            body.print-compact #sheet > .mt-5 {
+                margin-top: 6px !important;
+            }
+
+            body.print-compact #sheet > #summary {
+                margin-top: 6px !important;
+            }
+
+            body.print-compact #sheet > footer {
+                margin-top: 8px !important;
+            }
+
+            body.print-compact #sheet > p.mt-6 {
+                margin-top: 4px !important;
+            }
+
+            body.print-fit #sheet {
+                transform: scale(var(--print-scale, 1)) !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-200 py-6 print:bg-white print:py-0">
+    <div class="no-print mx-auto mb-4 flex max-w-[820px] flex-wrap items-center justify-between gap-2 px-3">
+        <a href="/pages/result-search.html" class="text-sm font-semibold text-brand-700 hover:underline">&larr; Back</a>
+        <div class="flex gap-2">
+            <a id="pdf-btn" href="#" class="btn-secondary hidden">Download PDF</a>
+            <button type="button" class="btn-primary" onclick="window.print()">Print marksheet</button>
+        </div>
+    </div>
+
+    <div id="error" class="mx-auto hidden max-w-[820px] rounded-xl bg-white p-8 text-center text-red-600 shadow"></div>
+
+    <article id="sheet" class="mx-auto hidden max-w-[820px] border-4 border-double border-brand-800 bg-white p-8 shadow-xl print:max-w-none print:shadow-none">
+        <header class="text-center">
+            <img src="/6716-removebg-preview.png" alt="" class="mx-auto h-16 w-16 object-contain" onerror="this.style.display='none'">
+            <h1 id="school-name" class="mt-1 text-2xl font-bold text-brand-800"></h1>
+            <p id="school-address" class="text-sm text-slate-500"></p>
+            <p id="school-eiin" class="text-sm text-slate-500"></p>
+        </header>
+
+        <div class="my-4 border-t border-slate-300 pt-3 text-center">
+            <h2 class="text-lg font-bold tracking-wide">ACADEMIC MARKSHEET</h2>
+            <p id="exam-title" class="text-sm text-slate-600"></p>
+        </div>
+
+        <dl id="info" class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm"></dl>
+
+        <div class="mt-5 overflow-hidden rounded border border-slate-400">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-100">
+                    <tr class="text-left">
+                        <th class="border-b border-r border-slate-400 px-3 py-2">Subject</th>
+                        <th class="border-b border-r border-slate-400 px-3 py-2 text-center">Code</th>
+                        <th class="border-b border-r border-slate-400 px-3 py-2 text-center">Full Marks</th>
+                        <th class="border-b border-r border-slate-400 px-3 py-2 text-center">Marks</th>
+                        <th class="border-b border-r border-slate-400 px-3 py-2 text-center">Grade</th>
+                        <th class="border-b border-slate-400 px-3 py-2 text-center">Grade Point</th>
+                    </tr>
+                </thead>
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+
+        <div id="summary" class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4"></div>
+
+        <footer class="mt-10 flex items-end justify-between gap-4">
+            <div class="text-center">
+                <img id="qr" alt="QR code to verify this result" class="h-24 w-24">
+                <p class="mt-1 text-[11px] text-slate-500">Scan to verify this result</p>
+            </div>
+            <div class="w-48 text-center">
+                <img src="/head-signature.png" alt="" class="mx-auto h-14 object-contain" onerror="this.style.display='none'">
+                <div class="border-t border-slate-800 pt-1 text-sm font-bold">Head Teacher</div>
+            </div>
+        </footer>
+        <p class="mt-6 text-center text-[11px] text-slate-400">This is a computer generated marksheet. Its authenticity can be checked by scanning the QR code.</p>
+    </article>
+
+    <script src="/js/app.js"></script>
+    <footer class="no-print mx-auto mt-6 max-w-[820px] px-4 pb-5 text-center text-xs text-slate-500">Made with ❤️ by <span class="font-semibold text-slate-700">Mohammad Fahim</span></footer>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        function fail(message) {
+            const box = App.$("#error");
+            box.textContent = message;
+            box.classList.remove("hidden");
+        }
+        function info(label, value) {
+            return '<div class="flex gap-2"><dt class="w-28 shrink-0 font-bold text-slate-500">' + App.esc(label) + ':</dt><dd>' + App.esc(value || "-") + "</dd></div>";
+        }
+        function box(label, value, bad) {
+            return '<div class="rounded-lg border border-slate-300 p-2 text-center"><p class="text-[11px] text-slate-500">' + App.esc(label) +
+                '</p><p class="text-lg font-bold ' + (bad ? "text-red-600" : "") + '">' + App.esc(value) + "</p></div>";
+        }
+
+        async function load() {
+            if (!params.get("roll") || !params.get("class_name") || !params.get("exam_name") || !params.get("exam_year")) {
+                return fail("Result information is missing.");
+            }
+            const q = "roll=" + encodeURIComponent(params.get("roll")) + "&class_name=" + encodeURIComponent(params.get("class_name")) +
+                "&exam_name=" + encodeURIComponent(params.get("exam_name")) + "&exam_year=" + encodeURIComponent(params.get("exam_year"));
+            const r = await App.api("/api/result/search?" + q, { noRedirect: true });
+            if (!r.ok) return fail(r.data.message || "Result not found.");
+
+            const d = r.data, s = d.student, m = d.summary;
+            const school = d.school || App.SCHOOL;
+            document.title = "Marksheet - " + s.name;
+            App.$("#school-name").textContent = school.name;
+            App.$("#school-address").textContent = school.address || "";
+            App.$("#school-eiin").textContent = s.eiin ? "EIIN: " + s.eiin : "";
+            App.$("#exam-title").textContent = s.exam_name + " - " + s.exam_year;
+            App.$("#info").innerHTML = info("Student Name", s.name) + info("Roll", s.roll) + info("Registration", s.registration) +
+                info("Class", s.class_name) + info("Group", s.group_name) + info("Year", s.exam_year);
+            App.$("#rows").innerHTML = d.subjects.map(function (x) {
+                return "<tr><td class=\"border-b border-r border-slate-300 px-3 py-1.5\">" + App.esc(x.subject_name) + "</td>" +
+                    '<td class="border-b border-r border-slate-300 px-3 py-1.5 text-center">' + App.esc(x.subject_code) + "</td>" +
+                    '<td class="border-b border-r border-slate-300 px-3 py-1.5 text-center">' + App.esc(x.full_marks) + "</td>" +
+                    '<td class="border-b border-r border-slate-300 px-3 py-1.5 text-center">' + App.esc(x.marks) + "</td>" +
+                    '<td class="border-b border-r border-slate-300 px-3 py-1.5 text-center">' + App.esc(x.grade) + "</td>" +
+                    '<td class="border-b border-slate-300 px-3 py-1.5 text-center">' + Number(x.grade_point).toFixed(2) + "</td></tr>";
+            }).join("");
+            const failed = String(m.result).toLowerCase() === "fail";
+            App.$("#summary").innerHTML = box("Total Marks", m.total_marks + " / " + m.total_full_marks) + box("GPA", Number(m.gpa).toFixed(2), failed) +
+                box("Result", m.result, failed) + box("Position", m.position);
+            App.$("#qr").src = d.qr;
+            const pdf = App.$("#pdf-btn");
+            pdf.href = "/api/result/marksheet.pdf?" + q;
+            pdf.classList.remove("hidden");
+            App.$("#sheet").classList.remove("hidden");
+        }
+        function preparePrintLayout() {
+            const sheet = App.$("#sheet");
+            if (!sheet || sheet.classList.contains("hidden")) return;
+
+            document.body.classList.remove("print-compact", "print-fit");
+            sheet.style.removeProperty("--print-scale");
+
+            // Default: keep the normal layout. Only QR/signature area goes to the bottom.
+            sheet.style.transform = "none";
+
+            const availableHeight = 280 * 3.779527559 - 28 * 3.779527559;
+            let contentHeight = sheet.scrollHeight;
+
+            // If the content is taller than the printable inner area,
+            // first reduce only the unnecessary gaps.
+            if (contentHeight > availableHeight) {
+                document.body.classList.add("print-compact");
+                contentHeight = sheet.scrollHeight;
+            }
+
+            // If it is still too tall, shrink the complete marksheet proportionally.
+            if (contentHeight > availableHeight) {
+                const scale = Math.min(1, availableHeight / contentHeight);
+                sheet.style.setProperty("--print-scale", scale.toFixed(4));
+                document.body.classList.add("print-fit");
+            }
+        }
+
+        function resetPrintLayout() {
+            const sheet = App.$("#sheet");
+            document.body.classList.remove("print-compact", "print-fit");
+            if (sheet) {
+                sheet.style.removeProperty("--print-scale");
+                sheet.style.removeProperty("transform");
+            }
+        }
+
+        window.addEventListener("beforeprint", preparePrintLayout);
+        window.addEventListener("afterprint", resetPrintLayout);
+
+        if (window.matchMedia) {
+            const printMedia = window.matchMedia("print");
+            if (printMedia.addEventListener) {
+                printMedia.addEventListener("change", function (event) {
+                    if (event.matches) preparePrintLayout();
+                    else resetPrintLayout();
+                });
+            }
+        }
+
+        load();
+    </script>
+</body>
+</html>

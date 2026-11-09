@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Check Result - Shaheed Nur Hossain Memorial School</title>
+    <link rel="icon" href="/6716-removebg-preview.png?v=3">
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="flex min-h-screen flex-col bg-slate-100">
+    <header class="bg-gradient-to-r from-brand-900 to-brand-700 text-white">
+        <div class="mx-auto flex max-w-4xl items-center gap-3 px-4 py-5">
+            <a href="/" class="flex items-center gap-3">
+                <img src="/6716-removebg-preview.png?v=3" alt="" class="h-12 w-12 rounded-full bg-white/90 object-contain p-0" onerror="this.style.display='none'">
+                <div>
+                    <p class="text-base font-bold leading-tight sm:text-lg">Shaheed Nur Hossain Memorial School</p>
+                    <p class="text-xs text-brand-200">Online Result Publication System</p>
+                </div>
+            </a>
+        </div>
+    </header>
+
+    <main class="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-8">
+        <section class="card !p-6">
+            <h2 class="text-lg font-bold">Search your result</h2>
+            <p class="mb-5 text-sm text-slate-500">Choose your class, exam and year, then type your roll number.</p>
+
+            <form id="search-form" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                    <label class="label" for="className">Class</label>
+                    <select id="className" class="input" required><option value="">Select class</option></select>
+                </div>
+                <div>
+                    <label class="label" for="examName">Exam</label>
+                    <select id="examName" class="input" required disabled><option value="">Select exam</option></select>
+                </div>
+                <div>
+                    <label class="label" for="examYear">Year</label>
+                    <select id="examYear" class="input" required disabled><option value="">Select year</option></select>
+                </div>
+                <div>
+                    <label class="label" for="roll">Roll number</label>
+                    <input id="roll" type="text" inputmode="numeric" class="input" placeholder="e.g. 12" maxlength="50" required autocomplete="off">
+                </div>
+                <div class="sm:col-span-2 lg:col-span-4">
+                    <button id="search-btn" type="submit" class="btn-primary w-full sm:w-auto sm:min-w-[11rem] !py-2.5">Search result</button>
+                </div>
+            </form>
+            <div id="message" class="mt-4 hidden rounded-lg px-4 py-3 text-sm" role="alert"></div>
+        </section>
+
+        <section id="result" class="hidden space-y-6">
+            <div class="card !p-0 overflow-hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-brand-50 px-6 py-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-brand-700" id="exam-line"></p>
+                        <h3 class="text-xl font-bold" id="student-name"></h3>
+                    </div>
+                    <div id="result-badge"></div>
+                </div>
+                <dl id="student-info" class="grid gap-x-6 gap-y-3 px-6 py-5 text-sm sm:grid-cols-3"></dl>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4" id="summary"></div>
+
+            <div class="card">
+                <h3 class="card-title">Subject-wise result</h3>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead><tr><th>Subject</th><th>Code</th><th class="text-center">Full marks</th><th class="text-center">Marks</th><th class="text-center">Grade</th><th class="text-center">Grade point</th></tr></thead>
+                        <tbody id="subjects"></tbody>
+                    </table>
+                </div>
+                <div class="mt-5 flex flex-wrap gap-3">
+                    <a id="pdf-btn" href="#" class="btn-primary">Download PDF marksheet</a>
+                    <a id="sheet-btn" href="#" target="_blank" rel="noopener" class="btn-secondary">Open printable marksheet</a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="pb-8 text-center text-xs text-slate-400">&copy; <span id="year"></span> Shaheed Nur Hossain Memorial School</footer>
+
+    <script src="/js/app.js"></script>
+    <footer class="no-print mt-auto border-t border-slate-200 bg-white px-4 py-5 text-center text-xs text-slate-500">Made with ❤️ by <span class="font-semibold text-slate-700">Mohammad Fahim</span></footer>
+
+    <script>
+        document.getElementById("year").textContent = new Date().getFullYear();
+        let options = [];
+        const cls = App.$("#className"), exam = App.$("#examName"), year = App.$("#examYear");
+
+        function uniq(list) { return Array.from(new Set(list)); }
+        function setMessage(text, kind) {
+            const box = App.$("#message");
+            if (!text) { box.classList.add("hidden"); return; }
+            box.className = "mt-4 rounded-lg px-4 py-3 text-sm " + (kind === "error" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700");
+            box.textContent = text;
+        }
+
+        async function loadOptions() {
+            const r = await App.api("/api/result/options", { noRedirect: true });
+            options = r.ok ? r.data.options : [];
+            const classes = uniq(options.map(function (o) { return o.class_name; })).sort(App.classSort);
+            App.fillSelect(cls, classes.map(function (c) { return { value: c, label: c }; }), "Select class");
+            if (r.ok && options.length === 0) setMessage("No results have been published yet. Please check back later.", "error");
+        }
+        cls.onchange = function () {
+            const names = uniq(options.filter(function (o) { return o.class_name === cls.value; }).map(function (o) { return o.exam_name; }));
+            App.fillSelect(exam, names.map(function (n) { return { value: n, label: n }; }), "Select exam");
+            App.fillSelect(year, [], "Select year");
+            exam.disabled = !cls.value; year.disabled = true;
+            if (names.length === 1) { exam.value = names[0]; exam.onchange(); }
+        };
+        exam.onchange = function () {
+            const years = uniq(options.filter(function (o) { return o.class_name === cls.value && o.exam_name === exam.value; })
+                .map(function (o) { return o.exam_year; })).sort(function (a, b) { return b - a; });
+            App.fillSelect(year, years.map(function (y) { return { value: y, label: y }; }), "Select year");
+            year.disabled = !exam.value;
+            if (years.length === 1) year.value = years[0];
+        };
+
+        function info(label, value) {
+            return '<div><dt class="text-xs text-slate-400">' + App.esc(label) + '</dt><dd class="font-semibold text-slate-900">' + App.esc(value || "-") + "</dd></div>";
+        }
+        function stat(label, value, tone) {
+            return '<div class="card !p-4 text-center"><p class="text-xs font-semibold uppercase tracking-wide text-slate-400">' + App.esc(label) +
+                '</p><p class="mt-1 text-2xl font-bold ' + tone + '">' + App.esc(value) + "</p></div>";
+        }
+
+        function show(data) {
+            const s = data.student, m = data.summary;
+            const failed = String(m.result).toLowerCase() === "fail";
+            App.$("#exam-line").textContent = s.exam_name + " " + s.exam_year + " - " + s.class_name;
+            App.$("#student-name").textContent = s.name;
+            App.$("#result-badge").innerHTML = failed ? '<span class="badge-red !px-4 !py-1.5 !text-sm">Fail</span>' : '<span class="badge-green !px-4 !py-1.5 !text-sm">Passed</span>';
+            App.$("#student-info").innerHTML = info("Roll", s.roll) + info("Registration", s.registration) + info("Group", s.group_name);
+            App.$("#summary").innerHTML =
+                stat("GPA", Number(m.gpa).toFixed(2), failed ? "text-red-600" : "text-brand-700") +
+                stat("Grade", m.grade, failed ? "text-red-600" : "text-slate-900") +
+                stat("Position", m.position, "text-slate-900") +
+                stat("Total marks", m.total_marks + " / " + m.total_full_marks, "text-slate-900");
+            App.$("#subjects").innerHTML = data.subjects.map(function (x) {
+                const bad = x.grade === "F";
+                return "<tr><td class=\"font-medium text-slate-900\">" + App.esc(x.subject_name) + (String(x.subject_type).toLowerCase() === "fourth" ? ' <span class="badge-gray ml-1">4th</span>' : "") +
+                    "</td><td>" + App.esc(x.subject_code) + '</td><td class="text-center">' + App.esc(x.full_marks) +
+                    '</td><td class="text-center font-semibold">' + App.esc(x.marks) +
+                    '</td><td class="text-center"><span class="' + (bad ? "badge-red" : "badge-blue") + '">' + App.esc(x.grade) +
+                    '</span></td><td class="text-center">' + Number(x.grade_point).toFixed(2) + "</td></tr>";
+            }).join("") || App.emptyRow(6, "No subject result found.");
+
+            const q = "roll=" + encodeURIComponent(s.roll) + "&class_name=" + encodeURIComponent(s.class_name) +
+                "&exam_name=" + encodeURIComponent(s.exam_name) + "&exam_year=" + encodeURIComponent(s.exam_year);
+            App.$("#pdf-btn").href = "/api/result/marksheet.pdf?" + q;
+            App.$("#sheet-btn").href = "/marksheet.html?" + q;
+            App.$("#result").classList.remove("hidden");
+            App.$("#result").scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        App.$("#search-form").onsubmit = async function (e) {
+            e.preventDefault();
+            setMessage("");
+            App.$("#result").classList.add("hidden");
+            const btn = App.$("#search-btn");
+            btn.disabled = true; btn.textContent = "Searching...";
+            const q = new URLSearchParams({
+                roll: App.$("#roll").value.trim(), class_name: cls.value, exam_name: exam.value, exam_year: year.value
+            });
+            const r = await App.api("/api/result/search?" + q.toString(), { noRedirect: true });
+            btn.disabled = false; btn.textContent = "Search result";
+            if (r.ok) show(r.data);
+            else setMessage(r.data.message || "Result not found.", "error");
+        };
+
+        loadOptions();
+    </script>
+</body>
+</html>
