@@ -190,7 +190,14 @@ class ApiController
         $this->audit($r,'result_updated','student',$id,$summary,$details);
         return $this->ok('Result updated successfully.',['final_gpa'=>$g['final']['gpa'],'final_grade'=>$g['final']['grade'],'result_status'=>$g['final']['status']]);
     }
-    public function deleteResult(Request $r,$id) {if($x=$this->admin($r))return $x;$s=DB::table('students')->where('id',$id)->first();if(!$s)return $this->fail('Result not found.',404);DB::table('students')->where('id',$id)->delete();$this->audit($r,'result_deleted','student',$id,'Deleted result of '.$s->name.' (roll '.$s->roll.')');return $this->ok('Result deleted successfully.');}
+    public function deleteResult(Request $r,$id) {
+        if($x=$this->admin($r))return $x;
+        $s=DB::table('students')->where('id',$id)->first(); if(!$s)return $this->fail('Result not found.',404);
+        $marks=DB::table('results')->join('subjects','subjects.id','=','results.subject_id')->where('results.student_id',$id)->select('subjects.subject_name','results.marks')->get();
+        DB::table('students')->where('id',$id)->delete();
+        $this->audit($r,'result_deleted','student',$id,'Deleted result of '.$s->name.' (roll '.$s->roll.') - Class '.$s->class_name.', '.$s->exam_name.' '.$s->exam_year,['student'=>(array)$s,'marks'=>$marks->map(fn($x)=>(array)$x)->all()]);
+        return $this->ok('Result deleted successfully.');
+    }
     public function publishResult(Request $r,$id) {
         if($x=$this->admin($r))return $x;$s=DB::table('students')->where('id',$id)->first();if(!$s)return $this->fail('Result not found.',404);
         $subs=$this->subjectsFor($s->class_name);$ids=DB::table('results')->where('student_id',$id)->pluck('subject_id')->all();$missing=$subs->filter(fn($a)=>$a->subject_type!=='fourth'&&!in_array($a->id,$ids))->pluck('subject_name')->all();if($missing)return $this->fail('Cannot publish: marks are missing for '.implode(', ',$missing).'.');
