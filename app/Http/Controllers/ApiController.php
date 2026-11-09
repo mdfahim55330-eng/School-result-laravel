@@ -154,13 +154,28 @@ class ApiController
     }
     public function updateResult(Request $r,$id) {
         $v=$r->validate(['student.name'=>'required|string|max:200','student.roll'=>'required|string|max:50','student.registration'=>'nullable|string|max:100','student.group_name'=>'nullable|string|max:50','results'=>'required|array|min:1','results.*.subject_id'=>'required|integer','results.*.marks'=>'required']);
-        $s=DB::table('students')->where('id',$id)->first();if(!$s)return $this->fail('Student result not found.',404);
-        $u=$this->staff($r);if($u->role!=='admin'&&$s->status==='published')return $this->fail('Only an admin can edit a published result. Ask an admin to unpublish it first.',403);
-        $subjects=$this->subjectsFor($s->class_name);try{$g=GradingService::process($subjects,$v['results']);}catch(\Throwable $e){return $this->fail($e->getMessage());}
-        $ids=collect($g['rows'])->pluck('subject_id')->all();$missing=$subjects->filter(fn($x)=>$x->subject_type!=='fourth'&&!in_array($x->id,$ids))->pluck('subject_name')->all();if($missing)return $this->fail('Marks are missing for: '.implode(', ',$missing).'.');
-        $st=$v['student'];if(DB::table('students')->where(['class_name'=>$s->class_name,'exam_name'=>$s->exam_name,'exam_year'=>$s->exam_year,'roll'=>trim($st['roll'])])->where('id','<>',$id)->exists())return $this->fail('Roll already exists for this class, exam and year.',409);
-        DB::transaction(function()use($id,$st,$g){DB::table('students')->where('id',$id)->update(['name'=>$st['name'],'roll'=>trim($st['roll']),'registration'=>$st['registration']??'','group_name'=>$st['group_name']??'','final_gpa'=>$g['final']['gpa'],'final_grade'=>$g['final']['grade'],'result_status'=>$g['final']['status'],'updated_at'=>now()]);$this->saveRows($id,$g['rows']);});
-        $this->audit($r,'result_updated','student',$id,'Edited result of '.$st['name'].' (roll '.$st['roll'].')');return $this->ok('Result updated successfully.',['final_gpa'=>$g['final']['gpa'],'final_grade'=>$g['final']['grade'],'result_status'=>$g['final']['status']]);
+        $s=DB::table('students')->where('id',$id)->first(); if(!$s)return $this->fail('Student result not found.',404);
+        $u=$this->staff($r); if($u->role!=='admin'&&$s->status==='published')return $this->fail('Only an admin can edit a published result. Ask an admin to unpublish it first.',403);
+        $subjects=$this->subjectsFor($s->class_name);
+        try{$g=GradingService::process($subjects,$v['results']);}catch(\\Throwable $e){$message=$e->getMessage()==='Invalid subject found.'?'Invalid subject for Class '.$s->class_name.'.':$e->getMessage();return $this->fail($message);}
+        $ids=collect($g['rows'])->pluck('subject_id')->all();
+        $missing=$subjects->filter(fn($x)=>$x->subject_type!=='fourth'&&!in_array($x->id,$ids))->pluck('subject_name')->all();
+        if($missing)return $this->fail('Marks are missing for: '.implode(', ',$missing).'.');
+        $st=$v['student']; $st['roll']=trim($st['roll']);
+        $duplicate=DB::table('students')->where(['class_name'=>$s->class_name,'exam_name'=>$s->exam_name,'exam_year'=>$s->exam_year,'roll'=>$st['roll']])->where('id','<>',$id)->first();
+        if($duplicate)return $this->fail('Roll '.$st['roll'].' already exists for this class, exam and year ('.$duplicate->name.'). Please use a different roll or edit the existing result.',409);
+        $oldRows=DB::table('results')->join('subjects','subjects.id','=','results.subject_id')->where('results.student_id',$id)->select('results.subject_id','results.marks','subjects.subject_name')->get();
+        $oldMarks=[]; foreach($oldRows as $row)$oldMarks[(int)$row->subject_id]=['marks'=>(float)$row->marks,'name'=>$row->subject_name];
+        DB::transaction(function()use($id,$st,$g){DB::table('students')->where('id',$id)->update(['name'=>$st['name'],'roll'=>$st['roll'],'registration'=>$st['registration']??'','group_name'=>$st['group_name']??'','final_gpa'=>$g['final']['gpa'],'final_grade'=>$g['final']['grade'],'result_status'=>$g['final']['status'],'updated_at'=>now()]);$this->saveRows($id,$g['rows']);});
+        $changes=[];
+        foreach($g['rows'] as $row){$before=$oldMarks[$row['subject_id']]??null;$name=$subjects->firstWhere('id',$row['subject_id'])->subject_name??'';if(!$before)$changes[]=['subject'=>$name,'from'=>null,'to'=>$row['marks']];elseif($before['marks']!==(float)$row['marks'])$changes[]=['subject'=>$name,'from'=>$before['marks'],'to'=>$row['marks']];}
+        $newIds=array_map('intval',$ids);
+        foreach($oldMarks as $subjectId=>$before)if(!in_array($subjectId,$newIds,true))$changes[]=['subject'=>$before['name'],'from'=>$before['marks'],'to'=>null];
+        $details=['changes'=>$changes,'gpa_from'=>(float)$s->final_gpa,'gpa_to'=>$g['final']['gpa'],'name_from'=>$s->name,'roll_from'=>$s->roll];
+        $summary='Edited result of '.$st['name'].' (roll '.$st['roll'].')';
+        if($changes)$summary.=': '.implode(', ',array_map(fn($x)=>$x['subject'].' '.($x['from']??'-').' -> '.($x['to']??'-'),$changes));
+        $this->audit($r,'result_updated','student',$id,$summary,$details);
+        return $this->ok('Result updated successfully.',['final_gpa'=>$g['final']['gpa'],'final_grade'=>$g['final']['grade'],'result_status'=>$g['final']['status']]);
     }
     public function deleteResult(Request $r,$id) {if($x=$this->admin($r))return $x;$s=DB::table('students')->where('id',$id)->first();if(!$s)return $this->fail('Result not found.',404);DB::table('students')->where('id',$id)->delete();$this->audit($r,'result_deleted','student',$id,'Deleted result of '.$s->name.' (roll '.$s->roll.')');return $this->ok('Result deleted successfully.');}
     public function publishResult(Request $r,$id) {
