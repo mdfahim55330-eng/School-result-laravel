@@ -282,8 +282,8 @@ class ApiController
     // Export and backup
     private function csvCell($value): string {
         $v=(string)($value??'');
-        if(preg_match('/^[=+\\-@\\t\\r]/',$v))$v="'".$v;
-        return preg_match('/[",\\n\\r]/',$v)?'"'.str_replace('"','""',$v).'"':$v;
+        if(preg_match('/^[=+\-@\t\r]/',$v))$v="'".$v;
+        return preg_match('/[",\n\r]/',$v)?'"'.str_replace('"','""',$v).'"':$v;
     }
     private function exportFilename(array $meta,string $ext): string {
         return preg_replace('/[^A-Za-z0-9._-]+/','-','results-class-'.$meta['class_name'].'-'.$meta['exam_name'].'-'.$meta['exam_year'].'.'.$ext);
@@ -301,8 +301,8 @@ class ApiController
             array_push($x,$s['total_marks'],number_format((float)$s['final_gpa'],2),$s['final_grade'],$s['result_status'],$s['status']);
             $rows[]=$x;
         }
-        $csv="\\xEF\\xBB\\xBF";
-        foreach($rows as $row)$csv.=implode(',',array_map(fn($v)=>$this->csvCell($v),$row))."\\r\\n";
+        $csv="\xEF\xBB\xBF";
+        foreach($rows as $row)$csv.=implode(',',array_map(fn($v)=>$this->csvCell($v),$row))."\r\n";
         $this->audit($r,'export','exam',null,'Exported CSV: Class '.$d['meta']['class_name'].' - '.$d['meta']['exam_name'].' '.$d['meta']['exam_year']);
         return response($csv,200,['Content-Type'=>'text/csv; charset=utf-8','Content-Disposition'=>'attachment; filename="'.$this->exportFilename($d['meta'],'csv').'"']);
     }
@@ -316,13 +316,13 @@ class ApiController
         $ws->fromArray($head,null,'A1');
         $last=Coordinate::stringFromColumnIndex(count($head));
         $ws->getStyle('A1:'.$last.'1')->getFont()->setBold(true);
-        $ws->getStyle('A1:'.$last.'1')->getFill()->setFillType(\\PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID)->getStartColor()->setARGB('FFDBEAFE');
+        $ws->getStyle('A1:'.$last.'1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('FFDBEAFE');
         foreach($head as $i=>$label)$ws->getColumnDimension(Coordinate::stringFromColumnIndex($i+1))->setWidth($i===2?28:max(10,mb_strlen((string)$label)+2));
         foreach($d['students'] as $s){
             $row=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];
             foreach($d['subjects'] as $sub)$row[]=$s['marks'][$sub['id']]??'';
             array_push($row,$s['total_marks'],(float)$s['final_gpa'],$s['final_grade'],$s['result_status'],$s['status']);
-            $row=array_map(fn($v)=>is_string($v)&&preg_match('/^[=+\\-@\\t\\r]/',$v)?"'".$v:$v,$row);
+            $row=array_map(fn($v)=>is_string($v)&&preg_match('/^[=+\-@\t\r]/',$v)?"'".$v:$v,$row);
             $ws->fromArray($row,null,'A'.($ws->getHighestRow()+1));
         }
         $ws->freezePane('D2');
