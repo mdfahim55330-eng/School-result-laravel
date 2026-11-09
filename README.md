@@ -32,7 +32,7 @@ Remove ADMIN_PASSWORD from the environment after the first admin account is crea
 
 ## Render deployment
 
-The repository includes Dockerfile, docker-entrypoint.sh, and render.yaml. Create a Render Web Service from this repository and provide a reachable external MySQL 8 database. Render's standard web service does not provide a managed MySQL database automatically.
+The repository includes Dockerfile, docker-entrypoint.sh, and render.yaml. Apache listens on Render's PORT (default 10000). Create a Render Web Service from this repository and provide a reachable external MySQL 8 database. Render's standard web service does not provide a managed MySQL database automatically.
 
 Set these Render environment variables:
 
