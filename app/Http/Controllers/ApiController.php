@@ -302,7 +302,7 @@ class ApiController
             }
         });
         $errors=[]; foreach($analysis['rows'] as $item) if(!$item['valid'])$errors[]=['row'=>$item['row'],'name'=>$item['name'],'roll'=>$item['roll'],'error'=>implode(' ',$item['errors'])];
-        $this->audit($r,'bulk_import','exam',$exam->id,'Excel import: '.$created.' new, '.$updated.' updated, '.count($errors).' not imported',['created'=>$created,'updated'=>$updated,'failed'=>count($errors),'published'=>$publish]);
+        $this->audit($r,'bulk_import','exam',$exam->id,'Excel import for Class '.$exam->class_name.' - '.$exam->exam_name.' '.$exam->exam_year.': '.$created.' new, '.$updated.' updated, '.count($errors).' not imported'.($publish?' (published)':' (draft)'),['file'=>$r->file('excelFile')->getClientOriginalName(),'mode'=>strtolower((string)$r->input('duplicate_mode','skip')),'published'=>$publish,'created'=>$created,'updated'=>$updated,'not_imported'=>count($errors)]);
         return response()->json(['success'=>true,'message'=>$errors?'Import finished: '.($created+$updated).' saved, '.count($errors).' row(s) NOT imported.':'Bulk import completed successfully.','total'=>count($analysis['rows']),'processed'=>$created+$updated,'created'=>$created,'updated'=>$updated,'failed'=>count($errors),'errors'=>$errors,'published'=>$publish]);
     }
     public function excelTemplate(Request $r) {
