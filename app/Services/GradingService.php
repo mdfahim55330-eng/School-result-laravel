@@ -1,6 +1,6 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
 class GradingService
 {
@@ -51,13 +51,13 @@ class GradingService
         foreach ($entries as $entry) {
             $id = (int)($entry['subject_id'] ?? 0);
             $subject = $byId->get($id);
-            if (!$subject) throw new \\InvalidArgumentException('Invalid subject found.');
-            if (isset($seen[$id])) throw new \\InvalidArgumentException($subject->subject_name.' is entered more than once.');
+            if (!$subject) throw new \InvalidArgumentException('Invalid subject found.');
+            if (isset($seen[$id])) throw new \InvalidArgumentException($subject->subject_name.' is entered more than once.');
             $seen[$id] = true;
             $raw = $entry['marks'] ?? null;
-            if ($raw === '' || $raw === null || !is_numeric($raw)) throw new \\InvalidArgumentException('Invalid marks for '.$subject->subject_name.'.');
+            if ($raw === '' || $raw === null || !is_numeric($raw)) throw new \InvalidArgumentException('Invalid marks for '.$subject->subject_name.'.');
             $marks = (float)$raw;
-            if ($marks < 0 || $marks > (float)$subject->full_marks) throw new \\InvalidArgumentException('Invalid marks for '.$subject->subject_name.'.');
+            if ($marks < 0 || $marks > (float)$subject->full_marks) throw new \InvalidArgumentException('Invalid marks for '.$subject->subject_name.'.');
             $g = self::grade($marks, (float)$subject->full_marks);
             $rows[] = [
                 'subject_id' => $id, 'marks' => $marks, 'grade' => $g['grade'],
