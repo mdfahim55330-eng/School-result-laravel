@@ -7,4 +7,5 @@ return [
  'verify_secret'=>env('VERIFY_SECRET') ?: (env('SESSION_SECRET') ?: env('APP_KEY','')),
  'public_base_url'=>rtrim((string)env('PUBLIC_BASE_URL',''),'/'),
  'upload_max_mb'=>(int)env('UPLOAD_MAX_MB',5),
+ 'upload_max_rows'=>(int)env('UPLOAD_MAX_ROWS',3000),
 ];
