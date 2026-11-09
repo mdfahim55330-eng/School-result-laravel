@@ -369,9 +369,9 @@ class ApiController
     public function backup(Request $r) {if($x=$this->admin($r))return $x;$data=['app'=>'school-result-system','version'=>2,'created_at'=>now()->toIso8601String()];foreach(['exams','subjects','students','results'] as $t)$data[$t]=DB::table($t)->orderBy('id')->get();$data['counts']=['exams'=>count($data['exams']),'subjects'=>count($data['subjects']),'students'=>count($data['students']),'results'=>count($data['results'])];$this->audit($r,'backup','system',null,'Downloaded backup ('.count($data['students']).' students)');return response()->json($data)->header('Content-Disposition','attachment; filename="result-backup-'.now()->format('Y-m-d').'.json"');}
     public function verifyResult($id,$sig) {
         $expected=$this->verifySignature($id);
-        if(!ctype_digit((string)$id)||!hash_equals($expected,(string)$sig)) return response('<h2>Verification link is not valid.</h2>',404)->header('Content-Type','text/html')->header('Cache-Control','no-store')->header('X-Robots-Tag','noindex');
+        if(!ctype_digit((string)$id)||!hash_equals($expected,(string)$sig)) return response()->view('verify-invalid',['message'=>'This verification link is not valid.'],404)->header('Cache-Control','no-store')->header('X-Robots-Tag','noindex');
         $s=DB::table('students')->where('id',$id)->where('status','published')->first();
-        if(!$s) return response('<h2>This result is not available or has been withdrawn.</h2>',404)->header('Content-Type','text/html')->header('Cache-Control','no-store')->header('X-Robots-Tag','noindex');
+        if(!$s) return response()->view('verify-invalid',['message'=>'This result is not available (it may have been withdrawn).'],404)->header('Cache-Control','no-store')->header('X-Robots-Tag','noindex');
         $d=$this->resultData($s);
         return response()->view('verify-result',['data'=>$d],200)->header('Cache-Control','no-store')->header('X-Robots-Tag','noindex');
     }
