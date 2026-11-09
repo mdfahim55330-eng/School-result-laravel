@@ -182,11 +182,11 @@ class ExcelService
         $subjectHeaders=$hasSubjects?array_map(fn($s)=>$s->subject_name.' ('.$s->subject_code.')',$subjects):['Bangla (101)','English (107)','Mathematics (109)'];
         $headers=array_merge(['Name','Roll','Registration','Group'],$subjectHeaders);
         $data=$book->getActiveSheet(); $data->setTitle('Data'); $data->fromArray($headers,null,'A1');
-        $data->getStyle('1:1')->getFont()->setBold(true);
-        $data->getStyle('1:1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFDBEAFE');
+        $data->getStyle('A1:'.Coordinate::stringFromColumnIndex(count($headers)).'1')->getFont()->setBold(true);
+        $data->getStyle('A1:'.Coordinate::stringFromColumnIndex(count($headers)).'1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFDBEAFE');
         foreach($headers as $i=>$header)$data->getColumnDimension(Coordinate::stringFromColumnIndex($i+1))->setWidth($i===0?28:max(12,mb_strlen((string)$header)+2));
         $data->freezePane('A2');
-        $example=$book->createSheet(); $example->setTitle('Example'); $example->fromArray($headers,null,'A1'); $example->getStyle('1:1')->getFont()->setBold(true);
+        $example=$book->createSheet(); $example->setTitle('Example'); $example->fromArray($headers,null,'A1'); $example->getStyle('A1:'.Coordinate::stringFromColumnIndex(count($headers)).'1')->getFont()->setBold(true);
         $sample=$hasSubjects?array_map(fn($s)=>max(0,(int)round((float)$s->full_marks*0.8)),$subjects):[80,80,80];
         $example->fromArray(array_merge(['Sample Student',1,'REG-0001',''],$sample),null,'A2');
         foreach($headers as $i=>$header)$example->getColumnDimension(Coordinate::stringFromColumnIndex($i+1))->setWidth($i===0?28:max(12,mb_strlen((string)$header)+2));
