@@ -146,7 +146,7 @@ class ApiController
         $exam=$this->exam($v['exam_id']); if(!$exam)return $this->fail('Exam not found.',404);
         $subjects=$this->subjectsFor($exam->class_name); if(!$subjects->count())return $this->fail('No subjects found for Class '.$exam->class_name.'.');
         try{$graded=GradingService::process($subjects,$v['results']);}
-        catch(\\Throwable $e){$message=$e->getMessage()==='Invalid subject found.'?'Invalid subject for Class '.$exam->class_name.'.':$e->getMessage();return $this->fail($message);}
+        catch(\Throwable $e){$message=$e->getMessage()==='Invalid subject found.'?'Invalid subject for Class '.$exam->class_name.'.':$e->getMessage();return $this->fail($message);}
         $entered=collect($graded['rows'])->pluck('subject_id')->all();
         $missing=$subjects->filter(fn($s)=>$s->subject_type!=='fourth'&&!in_array($s->id,$entered))->pluck('subject_name')->all();
         if($missing)return $this->fail('Marks are missing for: '.implode(', ',$missing).'.');
@@ -158,7 +158,7 @@ class ApiController
                 $sid=DB::table('students')->insertGetId(['name'=>$st['name'],'roll'=>$st['roll'],'registration'=>$st['registration']??'','group_name'=>$st['group_name']??'','class_name'=>$exam->class_name,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'final_gpa'=>$graded['final']['gpa'],'final_grade'=>$graded['final']['grade'],'result_status'=>$graded['final']['status'],'status'=>'draft','created_at'=>now(),'updated_at'=>now()]);
                 $this->saveRows($sid,$graded['rows']); return $sid;
             });
-        } catch(\\Illuminate\\Database\\QueryException $e) {
+        } catch(\Illuminate\Database\QueryException $e) {
             if((string)$e->getCode()==='23000')return $this->fail('A student with this roll already exists for this class, exam and year.',409);
             throw $e;
         }
