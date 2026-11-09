@@ -25,7 +25,7 @@ Route::prefix('api')->group(function () {
             Route::delete('/results/bulk', [API::class, 'bulkDelete']); Route::post('/results/publish-bulk', [API::class, 'publishBulk']); Route::get('/dashboard-stats', [API::class, 'dashboardStats']);
             Route::post('/bulk-preview', [API::class, 'bulkPreview']); Route::post('/bulk-import', [API::class, 'bulkImport']); Route::get('/download-excel-demo', [API::class, 'excelTemplate']);
             Route::get('/reports/options', [API::class, 'reportOptions']); Route::get('/reports/merit', [API::class, 'merit']); Route::get('/reports/tabulation', [API::class, 'tabulation']);
-            Route::get('/reports/statistics', [API::class, 'statistics']); Route::get('/reports/marksheets.pdf', [API::class, 'classPdf']);
+            Route::get('/reports/statistics', [API::class, 'statistics']); Route::get('/reports/marksheets.pdf', [API::class, 'classPdf'])->middleware('throttle:5,1');
             Route::get('/export/results.csv', [API::class, 'exportCsv']); Route::get('/export/results.xlsx', [API::class, 'exportXlsx']); Route::get('/backup', [API::class, 'backup']);
             Route::get('/users', [API::class, 'users']); Route::post('/users', [API::class, 'storeUser']); Route::put('/users/{id}', [API::class, 'updateUser'])->whereNumber('id');
             Route::post('/users/{id}/reset-password', [API::class, 'resetPassword'])->whereNumber('id'); Route::get('/audit', [API::class, 'auditLog']);
