@@ -280,9 +280,57 @@ class ApiController
     }
 
     // Export and backup
-    public function exportCsv(Request $r) { if($x=$this->admin($r))return $x; $d=$this->report($r);$head=['Position','Roll','Name','Registration','Group'];foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';array_push($head,'Total Marks','GPA','Grade','Result','Status');$rows=[$head];foreach($d['students'] as $s){$x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';array_push($x,$s['total_marks'],number_format($s['final_gpa'],2),$s['final_grade'],$s['result_status'],$s['status']);$rows[]=$x;}$csv="\xEF\xBB\xBF";foreach($rows as $row)$csv.=implode(',',array_map(fn($v)=>'"'.str_replace('"','""',(string)$v).'"',$row))."\r\n";$this->audit($r,'export','exam',null,'Exported CSV');return response($csv,200,['Content-Type'=>'text/csv; charset=utf-8','Content-Disposition'=>'attachment; filename="results.csv"']);}
-    public function exportXlsx(Request $r) { if($x=$this->admin($r))return $x; $d=$this->report($r);$book=new Spreadsheet();$ws=$book->getActiveSheet();$head=['Position','Roll','Name','Registration','Group'];foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';array_push($head,'Total Marks','GPA','Grade','Result','Status');$ws->fromArray($head,null,'A1');foreach($d['students'] as $s){$x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';array_push($x,$s['total_marks'],$s['final_gpa'],$s['final_grade'],$s['result_status'],$s['status']);$ws->fromArray($x,null,'A'.($ws->getHighestRow()+1));}$ws->getStyle('1:1')->getFont()->setBold(true);$ws->freezePane('D2');$tmp=tempnam(sys_get_temp_dir(),'xlsx');(new Xlsx($book))->save($tmp);$this->audit($r,'export','exam',null,'Exported Excel');return response()->download($tmp,'results.xlsx')->deleteFileAfterSend(true);}
-    public function backup(Request $r) {if($x=$this->admin($r))return $x;$data=['app'=>'school-result-system','version'=>2,'created_at'=>now()->toIso8601String()];foreach(['exams','subjects','students','results'] as $t)$data[$t]=DB::table($t)->orderBy('id')->get();$data['counts']=array_map(fn($t)=>count($data[$t]),['exams','subjects','students','results']);$this->audit($r,'backup','system',null,'Downloaded backup');return response()->json($data)->header('Content-Disposition','attachment; filename="result-backup-'.now()->format('Y-m-d').'.json"');}
+    private function csvCell($value): string {
+        $v=(string)($value??'');
+        if(preg_match('/^[=+\\-@\\t\\r]/',$v))$v="'".$v;
+        return preg_match('/[",\\n\\r]/',$v)?'"'.str_replace('"','""',$v).'"':$v;
+    }
+    private function exportFilename(array $meta,string $ext): string {
+        return preg_replace('/[^A-Za-z0-9._-]+/','-','results-class-'.$meta['class_name'].'-'.$meta['exam_name'].'-'.$meta['exam_year'].'.'.$ext);
+    }
+    public function exportCsv(Request $r) {
+        if($x=$this->admin($r))return $x;
+        $d=$this->report($r);
+        $head=['Position','Roll','Name','Registration','Group'];
+        foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';
+        array_push($head,'Total Marks','GPA','Grade','Result','Status');
+        $rows=[$head];
+        foreach($d['students'] as $s){
+            $x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];
+            foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';
+            array_push($x,$s['total_marks'],number_format((float)$s['final_gpa'],2),$s['final_grade'],$s['result_status'],$s['status']);
+            $rows[]=$x;
+        }
+        $csv="\\xEF\\xBB\\xBF";
+        foreach($rows as $row)$csv.=implode(',',array_map(fn($v)=>$this->csvCell($v),$row))."\\r\\n";
+        $this->audit($r,'export','exam',null,'Exported CSV: Class '.$d['meta']['class_name'].' - '.$d['meta']['exam_name'].' '.$d['meta']['exam_year']);
+        return response($csv,200,['Content-Type'=>'text/csv; charset=utf-8','Content-Disposition'=>'attachment; filename="'.$this->exportFilename($d['meta'],'csv').'"']);
+    }
+    public function exportXlsx(Request $r) {
+        if($x=$this->admin($r))return $x;
+        $d=$this->report($r);
+        $head=['Position','Roll','Name','Registration','Group'];
+        foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';
+        array_push($head,'Total Marks','GPA','Grade','Result','Status');
+        $book=new Spreadsheet(); $ws=$book->getActiveSheet(); $ws->setTitle('Results');
+        $ws->fromArray($head,null,'A1');
+        $last=Coordinate::stringFromColumnIndex(count($head));
+        $ws->getStyle('A1:'.$last.'1')->getFont()->setBold(true);
+        $ws->getStyle('A1:'.$last.'1')->getFill()->setFillType(\\PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID)->getStartColor()->setARGB('FFDBEAFE');
+        foreach($head as $i=>$label)$ws->getColumnDimension(Coordinate::stringFromColumnIndex($i+1))->setWidth($i===2?28:max(10,mb_strlen((string)$label)+2));
+        foreach($d['students'] as $s){
+            $row=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];
+            foreach($d['subjects'] as $sub)$row[]=$s['marks'][$sub['id']]??'';
+            array_push($row,$s['total_marks'],(float)$s['final_gpa'],$s['final_grade'],$s['result_status'],$s['status']);
+            $row=array_map(fn($v)=>is_string($v)&&preg_match('/^[=+\\-@\\t\\r]/',$v)?"'".$v:$v,$row);
+            $ws->fromArray($row,null,'A'.($ws->getHighestRow()+1));
+        }
+        $ws->freezePane('D2');
+        $tmp=tempnam(sys_get_temp_dir(),'xlsx'); (new Xlsx($book))->save($tmp);
+        $this->audit($r,'export','exam',null,'Exported Excel: Class '.$d['meta']['class_name'].' - '.$d['meta']['exam_name'].' '.$d['meta']['exam_year']);
+        return response()->download($tmp,$this->exportFilename($d['meta'],'xlsx'))->deleteFileAfterSend(true);
+    }
+    public function backup(Request $r) {if($x=$this->admin($r))return $x;$data=['app'=>'school-result-system','version'=>2,'created_at'=>now()->toIso8601String()];foreach(['exams','subjects','students','results'] as $t)$data[$t]=DB::table($t)->orderBy('id')->get();$data['counts']=['exams'=>count($data['exams']),'subjects'=>count($data['subjects']),'students'=>count($data['students']),'results'=>count($data['results'])];$this->audit($r,'backup','system',null,'Downloaded backup ('.count($data['students']).' students)');return response()->json($data)->header('Content-Disposition','attachment; filename="result-backup-'.now()->format('Y-m-d').'.json"');}
     public function verifyResult($id,$sig) {
         $expected=$this->verifySignature($id);
         if(!ctype_digit((string)$id)||!hash_equals($expected,(string)$sig)) return response('<h2>Verification link is not valid.</h2>',404)->header('Content-Type','text/html');
