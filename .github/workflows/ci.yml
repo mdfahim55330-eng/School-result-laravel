@@ -49,6 +49,10 @@ jobs:
       - run: composer install --no-interaction --prefer-dist
       - name: PHP syntax check
         run: find app bootstrap config database public routes resources -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Run grading and Excel smoke tests
+        run: php tests/smoke.php
       - name: Run MySQL migrations and seed admin
         run: php artisan migrate:fresh --seed --force
       - run: php artisan route:list
+      - name: Build production Docker image
+        run: docker build --pull -t school-result-laravel .
