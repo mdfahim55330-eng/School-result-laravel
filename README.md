@@ -42,7 +42,7 @@ Set these Render environment variables:
 - DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD: from the external MySQL provider
 - ADMIN_USERNAME, ADMIN_PASSWORD: initial admin credentials (password at least 8 characters)
 - APP_ENV=production, APP_DEBUG=false
-- Optional: SCHOOL_NAME, SCHOOL_ADDRESS, SCHOOL_EIIN, MERIT_MODE=marks|gpa, VERIFY_SECRET
+- Optional: SCHOOL_NAME, SCHOOL_ADDRESS, SCHOOL_EIIN, MERIT_MODE=marks|gpa, VERIFY_SECRET, SESSION_SECRET, PUBLIC_BASE_URL
 
 The container runs migrations and the initial database seeder at startup. Keep APP_KEY and VERIFY_SECRET stable after generating/printing QR-enabled marksheets.
 
