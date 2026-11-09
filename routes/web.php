@@ -4,7 +4,7 @@ use App\Http\Controllers\ApiController as API;
 use App\Http\Middleware\StaffAuth;
 Route::get('/', fn () => redirect('/index.html'));
 Route::get('/healthz', [API::class, 'health']);
-Route::get('/verify/{id}/{sig}', [API::class, 'verifyResult']);
+Route::get('/verify/{id}/{sig}', [API::class, 'verifyResult'])->middleware('throttle:60,1');
 Route::prefix('api')->group(function () {
     Route::get('/result/options', [API::class, 'publicOptions']);
     Route::get('/result/search', [API::class, 'publicSearch']);
