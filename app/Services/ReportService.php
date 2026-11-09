@@ -26,7 +26,8 @@ class ReportService
         foreach ($subjects as $s) $subById[$s['id']] = $s;
         $byStudent = [];
         foreach ($rows as $r) $byStudent[$r['student_id']][] = $r;
-        $nineTen = in_array(strtolower(trim($class)), ['nine','ten','9','10','ix','x'], true);
+        $normalizedClass=preg_replace('/[\\s._-]+/','',preg_replace('/^class\\s*/i','',strtolower(trim($class))));
+        $nineTen = in_array($normalizedClass, ['nine','ten','9','10','ix','x'], true);
         $list = [];
         foreach ($students as $s) {
             $marks=[]; $grades=[]; $total=0; $full=0; $merit=0;
