@@ -157,7 +157,7 @@ class ApiController
         $s=DB::table('students')->where('id',$id)->first(); if(!$s)return $this->fail('Student result not found.',404);
         $u=$this->staff($r); if($u->role!=='admin'&&$s->status==='published')return $this->fail('Only an admin can edit a published result. Ask an admin to unpublish it first.',403);
         $subjects=$this->subjectsFor($s->class_name);
-        try{$g=GradingService::process($subjects,$v['results']);}catch(\\Throwable $e){$message=$e->getMessage()==='Invalid subject found.'?'Invalid subject for Class '.$s->class_name.'.':$e->getMessage();return $this->fail($message);}
+        try{$g=GradingService::process($subjects,$v['results']);}catch(\Throwable $e){$message=$e->getMessage()==='Invalid subject found.'?'Invalid subject for Class '.$s->class_name.'.':$e->getMessage();return $this->fail($message);}
         $ids=collect($g['rows'])->pluck('subject_id')->all();
         $missing=$subjects->filter(fn($x)=>$x->subject_type!=='fourth'&&!in_array($x->id,$ids))->pluck('subject_name')->all();
         if($missing)return $this->fail('Marks are missing for: '.implode(', ',$missing).'.');
