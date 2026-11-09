@@ -6,9 +6,9 @@ Route::get('/', fn () => redirect('/index.html'));
 Route::get('/healthz', [API::class, 'health']);
 Route::get('/verify/{id}/{sig}', [API::class, 'verifyResult'])->middleware('throttle:60,1');
 Route::prefix('api')->group(function () {
-    Route::get('/result/options', [API::class, 'publicOptions']);
-    Route::get('/result/search', [API::class, 'publicSearch']);
-    Route::get('/result/marksheet.pdf', [API::class, 'publicPdf']);
+    Route::get('/result/options', [API::class, 'publicOptions'])->middleware('throttle:60,1');
+    Route::get('/result/search', [API::class, 'publicSearch'])->middleware('throttle:60,1');
+    Route::get('/result/marksheet.pdf', [API::class, 'publicPdf'])->middleware('throttle:10,1');
     
     Route::prefix('admin')->group(function () {
         Route::post('/login', [API::class, 'login'])->middleware('throttle:10,15');
