@@ -247,7 +247,7 @@ class ApiController
         $exam=$this->exam($r->input('exam_id')); if(!$exam)return $this->fail('Exam not found.',404);
         $subjects=$this->subjectsFor($exam->class_name); if(!$subjects->count())return $this->fail('No subjects found for class '.$exam->class_name.'.');
         try {
-            $sheet=ExcelService::readSheet($r->file('excelFile'),3000);
+            $sheet=ExcelService::readSheet($r->file('excelFile'),config('school.upload_max_rows',3000));
             $analysis=ExcelService::analyzeRows($sheet['columns'],$sheet['rows'],$subjects,$this->existingForExam($exam),strtolower((string)$r->input('duplicate_mode','skip'))==='update'?'update':'skip',$this->staff($r)->role!=='admin');
         } catch(\Throwable $e) { return $this->fail($e->getMessage()); }
         $user=$this->staff($r); $publish=$user->role==='admin'&&strtolower((string)$r->input('publish','true'))!=='false';
