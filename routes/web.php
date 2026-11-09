@@ -1,7 +1,7 @@
 <?php
-use Illuminate\\Support\\Facades\\Route;
-use App\\Http\\Controllers\\ApiController as API;
-use App\\Http\\Middleware\\StaffAuth;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ApiController as API;
+use App\Http\Middleware\StaffAuth;
 Route::get('/', fn () => redirect('/index.html'));
 Route::get('/healthz', [API::class, 'health']);
 Route::get('/verify/{id}/{sig}', [API::class, 'verifyResult']);
