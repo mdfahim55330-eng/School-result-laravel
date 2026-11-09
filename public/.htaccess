@@ -3,6 +3,11 @@
         Options -MultiViews -Indexes
     </IfModule>
     RewriteEngine On
+
+    # Route staff-only HTML pages through Laravel so the same server-side
+    # session and role checks as the original Express application are enforced.
+    RewriteRule ^pages/(admin|classes|subjects|exams|individual-result|result-list|bulk-result|merit-list|tabulation|statistics|users)\.html$ index.php [L]
+
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
     RewriteCond %{HTTP:X-XSRF-TOKEN} .
