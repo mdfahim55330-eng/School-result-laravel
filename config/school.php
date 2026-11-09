@@ -4,6 +4,7 @@ return [
  'address'=>env('SCHOOL_ADDRESS','Biral, Dinajpur'),
  'eiin'=>env('SCHOOL_EIIN',''),
  'merit_mode'=>strtolower(env('MERIT_MODE','marks'))==='gpa'?'gpa':'marks',
- 'verify_secret'=>env('VERIFY_SECRET') ?: env('APP_KEY',''),
+ 'verify_secret'=>env('VERIFY_SECRET') ?: (env('SESSION_SECRET') ?: env('APP_KEY','')),
+ 'public_base_url'=>rtrim((string)env('PUBLIC_BASE_URL',''),'/'),
  'upload_max_mb'=>(int)env('UPLOAD_MAX_MB',5),
 ];
