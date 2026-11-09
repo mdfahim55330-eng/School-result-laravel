@@ -143,14 +143,27 @@ class ApiController
     }
     public function storeResult(Request $r) {
         $v=$r->validate(['exam_id'=>'required|integer','student.name'=>'required|string|max:200','student.roll'=>'required|string|max:50','student.registration'=>'nullable|string|max:100','student.group_name'=>'nullable|string|max:50','results'=>'required|array|min:1','results.*.subject_id'=>'required|integer','results.*.marks'=>'required']);
-        $exam=$this->exam($v['exam_id']);if(!$exam)return $this->fail('Exam not found.',404);
-        $subjects=$this->subjectsFor($exam->class_name);if(!$subjects->count())return $this->fail('No subjects found for Class '.$exam->class_name.'.');
-        try{$graded=GradingService::process($subjects,$v['results']);}catch(\Throwable $e){return $this->fail($e->getMessage());}
-        $entered=collect($graded['rows'])->pluck('subject_id')->all();$missing=$subjects->filter(fn($s)=>$s->subject_type!=='fourth'&&!in_array($s->id,$entered))->pluck('subject_name')->all();if($missing)return $this->fail('Marks are missing for: '.implode(', ',$missing).'.');
-        $st=$v['student'];$st['roll']=trim($st['roll']);
-        if(DB::table('students')->where(['class_name'=>$exam->class_name,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'roll'=>$st['roll']])->exists())return $this->fail('Roll '.$st['roll'].' already exists for this class, exam and year.',409);
-        $id=DB::transaction(function()use($exam,$st,$graded){$sid=DB::table('students')->insertGetId(['name'=>$st['name'],'roll'=>$st['roll'],'registration'=>$st['registration']??'','group_name'=>$st['group_name']??'','class_name'=>$exam->class_name,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'final_gpa'=>$graded['final']['gpa'],'final_grade'=>$graded['final']['grade'],'result_status'=>$graded['final']['status'],'status'=>'draft','created_at'=>now(),'updated_at'=>now()]);$this->saveRows($sid,$graded['rows']);return $sid;});
-        $this->audit($r,'result_created','student',$id,'Saved result of '.$st['name'].' (roll '.$st['roll'].')');return $this->ok('Result saved successfully.',['student_id'=>$id,'gpa'=>$graded['final']['gpa'],'grade'=>$graded['final']['grade'],'result'=>$graded['final']['status']]);
+        $exam=$this->exam($v['exam_id']); if(!$exam)return $this->fail('Exam not found.',404);
+        $subjects=$this->subjectsFor($exam->class_name); if(!$subjects->count())return $this->fail('No subjects found for Class '.$exam->class_name.'.');
+        try{$graded=GradingService::process($subjects,$v['results']);}
+        catch(\\Throwable $e){$message=$e->getMessage()==='Invalid subject found.'?'Invalid subject for Class '.$exam->class_name.'.':$e->getMessage();return $this->fail($message);}
+        $entered=collect($graded['rows'])->pluck('subject_id')->all();
+        $missing=$subjects->filter(fn($s)=>$s->subject_type!=='fourth'&&!in_array($s->id,$entered))->pluck('subject_name')->all();
+        if($missing)return $this->fail('Marks are missing for: '.implode(', ',$missing).'.');
+        $st=$v['student']; $st['roll']=trim($st['roll']);
+        $duplicate=DB::table('students')->where(['class_name'=>$exam->class_name,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'roll'=>$st['roll']])->first();
+        if($duplicate)return $this->fail('Roll '.$st['roll'].' already exists for this class, exam and year ('.$duplicate->name.'). Please use a different roll or edit the existing result.',409);
+        try {
+            $id=DB::transaction(function()use($exam,$st,$graded){
+                $sid=DB::table('students')->insertGetId(['name'=>$st['name'],'roll'=>$st['roll'],'registration'=>$st['registration']??'','group_name'=>$st['group_name']??'','class_name'=>$exam->class_name,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'final_gpa'=>$graded['final']['gpa'],'final_grade'=>$graded['final']['grade'],'result_status'=>$graded['final']['status'],'status'=>'draft','created_at'=>now(),'updated_at'=>now()]);
+                $this->saveRows($sid,$graded['rows']); return $sid;
+            });
+        } catch(\\Illuminate\\Database\\QueryException $e) {
+            if((string)$e->getCode()==='23000')return $this->fail('A student with this roll already exists for this class, exam and year.',409);
+            throw $e;
+        }
+        $this->audit($r,'result_created','student',$id,'Saved result of '.$st['name'].' (roll '.$st['roll'].') - Class '.$exam->class_name.', '.$exam->exam_name.' '.$exam->exam_year,['gpa'=>$graded['final']['gpa'],'grade'=>$graded['final']['grade'],'result'=>$graded['final']['status']]);
+        return $this->ok('Result saved successfully.',['student_id'=>$id,'gpa'=>$graded['final']['gpa'],'grade'=>$graded['final']['grade'],'result'=>$graded['final']['status']]);
     }
     public function updateResult(Request $r,$id) {
         $v=$r->validate(['student.name'=>'required|string|max:200','student.roll'=>'required|string|max:50','student.registration'=>'nullable|string|max:100','student.group_name'=>'nullable|string|max:50','results'=>'required|array|min:1','results.*.subject_id'=>'required|integer','results.*.marks'=>'required']);
