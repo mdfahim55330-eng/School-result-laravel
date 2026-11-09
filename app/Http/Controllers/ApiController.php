@@ -224,7 +224,7 @@ class ApiController
     public function bulkPreview(Request $r) {
         $r->validate(['excelFile'=>'required|file|mimes:xlsx|max:5120']);
         try { $sheet=ExcelService::readSheet($r->file('excelFile'),3000); }
-        catch(\\Throwable $e) { return $this->fail($e->getMessage()); }
+        catch(\Throwable $e) { return $this->fail($e->getMessage()); }
         $rawRows=array_map(fn($row)=>array_diff_key($row,['__row'=>true]),$sheet['rows']);
         $response=['success'=>true,'total_rows'=>count($rawRows),'columns'=>$sheet['columns'],'rows'=>$rawRows];
         $examId=(int)$r->input('exam_id');
@@ -232,7 +232,7 @@ class ApiController
             $exam=$this->exam($examId); if(!$exam)return $this->fail('Exam not found.',404);
             $subjects=$this->subjectsFor($exam->class_name); if(!$subjects->count())return $this->fail('No subjects found for class '.$exam->class_name.'.');
             try { $analysis=ExcelService::analyzeRows($sheet['columns'],$sheet['rows'],$subjects,$this->existingForExam($exam),strtolower((string)$r->input('duplicate_mode','skip'))==='update'?'update':'skip',$this->staff($r)->role!=='admin'); }
-            catch(\\Throwable $e) { return $this->fail($e->getMessage()); }
+            catch(\Throwable $e) { return $this->fail($e->getMessage()); }
             $response['exam']=['id'=>$exam->id,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'class_name'=>$exam->class_name];
             $response['counts']=$analysis['counts'];
             $response['analysis']=array_map(fn($x)=>['row'=>$x['row'],'name'=>$x['name'],'roll'=>$x['roll'],'registration'=>$x['registration'],'valid'=>$x['valid'],'state'=>$x['state'],'errors'=>$x['errors'],'gpa'=>$x['gpa'],'grade'=>$x['grade'],'result'=>$x['result']],$analysis['rows']);
@@ -246,7 +246,7 @@ class ApiController
         try {
             $sheet=ExcelService::readSheet($r->file('excelFile'),3000);
             $analysis=ExcelService::analyzeRows($sheet['columns'],$sheet['rows'],$subjects,$this->existingForExam($exam),strtolower((string)$r->input('duplicate_mode','skip'))==='update'?'update':'skip',$this->staff($r)->role!=='admin');
-        } catch(\\Throwable $e) { return $this->fail($e->getMessage()); }
+        } catch(\Throwable $e) { return $this->fail($e->getMessage()); }
         $user=$this->staff($r); $publish=$user->role==='admin'&&strtolower((string)$r->input('publish','true'))!=='false';
         $good=array_values(array_filter($analysis['rows'],fn($x)=>$x['valid'])); $created=0; $updated=0;
         DB::transaction(function() use($good,$exam,$subjects,$publish,&$created,&$updated) {
