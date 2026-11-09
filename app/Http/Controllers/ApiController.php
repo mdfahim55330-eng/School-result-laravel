@@ -1,21 +1,21 @@
 <?php
 
-namespace App\\Http\\Controllers;
+namespace App\Http\Controllers;
 
-use App\\Services\\GradingService;
-use App\\Services\\ReportService;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Hash;
-use Illuminate\\Support\\Facades\\URL;
-use PhpOffice\\PhpSpreadsheet\\IOFactory;
-use PhpOffice\\PhpSpreadsheet\\Spreadsheet;
-use PhpOffice\\PhpSpreadsheet\\Writer\\Xlsx;
-use Barryvdh\\DomPDF\\Facade\\Pdf;
-use BaconQrCode\\Renderer\\ImageRenderer;
-use BaconQrCode\\Renderer\\Image\\SvgImageBackEnd;
-use BaconQrCode\\Renderer\\RendererStyle\\RendererStyle;
-use BaconQrCode\\Writer;
+use App\Services\GradingService;
+use App\Services\ReportService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\URL;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Barryvdh\DomPDF\Facade\Pdf;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 
 class ApiController
 {
@@ -141,7 +141,7 @@ class ApiController
         $v=$r->validate(['exam_id'=>'required|integer','student.name'=>'required|string|max:200','student.roll'=>'required|string|max:50','student.registration'=>'nullable|string|max:100','student.group_name'=>'nullable|string|max:50','results'=>'required|array|min:1','results.*.subject_id'=>'required|integer','results.*.marks'=>'required']);
         $exam=$this->exam($v['exam_id']);if(!$exam)return $this->fail('Exam not found.',404);
         $subjects=$this->subjectsFor($exam->class_name);if(!$subjects->count())return $this->fail('No subjects found for Class '.$exam->class_name.'.');
-        try{$graded=GradingService::process($subjects,$v['results']);}catch(\\Throwable $e){return $this->fail($e->getMessage());}
+        try{$graded=GradingService::process($subjects,$v['results']);}catch(\Throwable $e){return $this->fail($e->getMessage());}
         $entered=collect($graded['rows'])->pluck('subject_id')->all();$missing=$subjects->filter(fn($s)=>$s->subject_type!=='fourth'&&!in_array($s->id,$entered))->pluck('subject_name')->all();if($missing)return $this->fail('Marks are missing for: '.implode(', ',$missing).'.');
         $st=$v['student'];$st['roll']=trim($st['roll']);
         if(DB::table('students')->where(['class_name'=>$exam->class_name,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'roll'=>$st['roll']])->exists())return $this->fail('Roll '.$st['roll'].' already exists for this class, exam and year.',409);
@@ -152,7 +152,7 @@ class ApiController
         $v=$r->validate(['student.name'=>'required|string|max:200','student.roll'=>'required|string|max:50','student.registration'=>'nullable|string|max:100','student.group_name'=>'nullable|string|max:50','results'=>'required|array|min:1','results.*.subject_id'=>'required|integer','results.*.marks'=>'required']);
         $s=DB::table('students')->where('id',$id)->first();if(!$s)return $this->fail('Student result not found.',404);
         $u=$this->staff($r);if($u->role!=='admin'&&$s->status==='published')return $this->fail('Only an admin can edit a published result. Ask an admin to unpublish it first.',403);
-        $subjects=$this->subjectsFor($s->class_name);try{$g=GradingService::process($subjects,$v['results']);}catch(\\Throwable $e){return $this->fail($e->getMessage());}
+        $subjects=$this->subjectsFor($s->class_name);try{$g=GradingService::process($subjects,$v['results']);}catch(\Throwable $e){return $this->fail($e->getMessage());}
         $ids=collect($g['rows'])->pluck('subject_id')->all();$missing=$subjects->filter(fn($x)=>$x->subject_type!=='fourth'&&!in_array($x->id,$ids))->pluck('subject_name')->all();if($missing)return $this->fail('Marks are missing for: '.implode(', ',$missing).'.');
         $st=$v['student'];if(DB::table('students')->where(['class_name'=>$s->class_name,'exam_name'=>$s->exam_name,'exam_year'=>$s->exam_year,'roll'=>trim($st['roll'])])->where('id','<>',$id)->exists())return $this->fail('Roll already exists for this class, exam and year.',409);
         DB::transaction(function()use($id,$st,$g){DB::table('students')->where('id',$id)->update(['name'=>$st['name'],'roll'=>trim($st['roll']),'registration'=>$st['registration']??'','group_name'=>$st['group_name']??'','final_gpa'=>$g['final']['gpa'],'final_grade'=>$g['final']['grade'],'result_status'=>$g['final']['status'],'updated_at'=>now()]);$this->saveRows($id,$g['rows']);});
@@ -241,7 +241,7 @@ class ApiController
             if($old && $mode!=='update') $errs[]='Duplicate roll already exists.';
             if($old && $lockPublished && $old->status==='published') $errs[]='Published results can only be updated by an admin.';
             try { $graded=$marks?GradingService::process($subs,$marks):null; }
-            catch(\\Throwable $e) { $errs[]=$e->getMessage(); $graded=null; }
+            catch(\Throwable $e) { $errs[]=$e->getMessage(); $graded=null; }
             $valid=!$errs && $graded;
             $out[]=['row'=>$row['__row'],'name'=>$name,'roll'=>$roll,'valid'=>(bool)$valid,'state'=>$state,'errors'=>$errs,'gpa'=>$graded['final']['gpa']??null,'grade'=>$graded['final']['grade']??null,'result'=>$graded['final']['status']??null,'marks'=>$graded['rows']??[],'existing_id'=>$old->id??null,'registration'=>$row['Registration']??'','group_name'=>$row['Group']??''];
         }
@@ -270,7 +270,7 @@ class ApiController
     }
 
     // Export and backup
-    public function exportCsv(Request $r) { if($x=$this->admin($r))return $x; $d=$this->report($r);$head=['Position','Roll','Name','Registration','Group'];foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';array_push($head,'Total Marks','GPA','Grade','Result','Status');$rows=[$head];foreach($d['students'] as $s){$x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';array_push($x,$s['total_marks'],number_format($s['final_gpa'],2),$s['final_grade'],$s['result_status'],$s['status']);$rows[]=$x;}$csv="\\xEF\\xBB\\xBF";foreach($rows as $row)$csv.=implode(',',array_map(fn($v)=>'"'.str_replace('"','""',(string)$v).'"',$row))."\\r\\n";$this->audit($r,'export','exam',null,'Exported CSV');return response($csv,200,['Content-Type'=>'text/csv; charset=utf-8','Content-Disposition'=>'attachment; filename="results.csv"']);}
+    public function exportCsv(Request $r) { if($x=$this->admin($r))return $x; $d=$this->report($r);$head=['Position','Roll','Name','Registration','Group'];foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';array_push($head,'Total Marks','GPA','Grade','Result','Status');$rows=[$head];foreach($d['students'] as $s){$x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';array_push($x,$s['total_marks'],number_format($s['final_gpa'],2),$s['final_grade'],$s['result_status'],$s['status']);$rows[]=$x;}$csv="\xEF\xBB\xBF";foreach($rows as $row)$csv.=implode(',',array_map(fn($v)=>'"'.str_replace('"','""',(string)$v).'"',$row))."\r\n";$this->audit($r,'export','exam',null,'Exported CSV');return response($csv,200,['Content-Type'=>'text/csv; charset=utf-8','Content-Disposition'=>'attachment; filename="results.csv"']);}
     public function exportXlsx(Request $r) { if($x=$this->admin($r))return $x; $d=$this->report($r);$book=new Spreadsheet();$ws=$book->getActiveSheet();$head=['Position','Roll','Name','Registration','Group'];foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';array_push($head,'Total Marks','GPA','Grade','Result','Status');$ws->fromArray($head,null,'A1');foreach($d['students'] as $s){$x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';array_push($x,$s['total_marks'],$s['final_gpa'],$s['final_grade'],$s['result_status'],$s['status']);$ws->fromArray($x,null,'A'.($ws->getHighestRow()+1));}$ws->getStyle('1:1')->getFont()->setBold(true);$ws->freezePane('D2');$tmp=tempnam(sys_get_temp_dir(),'xlsx');(new Xlsx($book))->save($tmp);$this->audit($r,'export','exam',null,'Exported Excel');return response()->download($tmp,'results.xlsx')->deleteFileAfterSend(true);}
     public function backup(Request $r) {if($x=$this->admin($r))return $x;$data=['app'=>'school-result-system','version'=>2,'created_at'=>now()->toIso8601String()];foreach(['exams','subjects','students','results'] as $t)$data[$t]=DB::table($t)->orderBy('id')->get();$data['counts']=array_map(fn($t)=>count($data[$t]),['exams','subjects','students','results']);$this->audit($r,'backup','system',null,'Downloaded backup');return response()->json($data)->header('Content-Disposition','attachment; filename="result-backup-'.now()->format('Y-m-d').'.json"');}
     public function verifyResult($id,$sig) {
@@ -281,5 +281,5 @@ class ApiController
         $d=$this->resultData($s);
         return response()->view('verify-result',['data'=>$d],200)->header('X-Robots-Tag','noindex');
     }
-    public function health() {try{DB::select('SELECT 1');return response()->json(['ok'=>true]);}catch(\\Throwable $e){return response()->json(['ok'=>false],503);}}
+    public function health() {try{DB::select('SELECT 1');return response()->json(['ok'=>true]);}catch(\Throwable $e){return response()->json(['ok'=>false],503);}}
 }
