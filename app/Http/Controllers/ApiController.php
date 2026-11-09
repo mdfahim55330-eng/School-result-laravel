@@ -179,7 +179,7 @@ class ApiController
         $changed=0;$skipped=0;
         DB::transaction(function()use($v,$students,&$changed,&$skipped){foreach($students as $s){if($v['action']==='unpublish'){if($s->status==='published'){$changed++;DB::table('students')->where('id',$s->id)->update(['status'=>'draft','updated_at'=>now()]);}}else{$subs=DB::table('subjects')->where('class_name',$s->class_name)->where('subject_type','<>','fourth')->pluck('id')->all();$have=DB::table('results')->where('student_id',$s->id)->pluck('subject_id')->all();if(!array_diff($subs,$have)){if($s->status!=='published')$changed++;DB::table('students')->where('id',$s->id)->update(['status'=>'published','updated_at'=>now()]);}else $skipped++;}}});
         $message=$v['action']==='publish'?$changed.' result(s) published.':$changed.' result(s) moved back to draft.';if($skipped)$message.=' '.$skipped.' result(s) were NOT published because marks are missing for some subjects.';
-        $this->audit($r,'results_bulk_'.$v['action'],'exam',null,$message);return $this->ok($message,['total'=>$students->count(),'changed'=>$changed,'skipped_incomplete'=>$skipped]);
+        $this->audit($r,$v['action']==='publish'?'results_bulk_published':'results_bulk_unpublished','exam',null,($v['action']==='publish'?'Published':'Unpublished').' '.$changed.' result(s) of Class '.$v['class_name'].' - '.$v['exam_name'].' '.$v['exam_year'],['total'=>$students->count(),'changed'=>$changed,'skipped_incomplete'=>$skipped]);return $this->ok($message,['total'=>$students->count(),'changed'=>$changed,'skipped_incomplete'=>$skipped]);
     }
 
     // Reports
