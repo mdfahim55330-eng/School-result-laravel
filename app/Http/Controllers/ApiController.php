@@ -308,9 +308,10 @@ class ApiController
     public function excelTemplate(Request $r) {
         $exam=$r->filled('exam_id')?$this->exam($r->query('exam_id')):null;
         $subjects=$exam?$this->subjectsFor($exam->class_name):null;
+        if($exam && !$subjects->count())return $this->fail('No subjects found for class '.$exam->class_name.'.');
         $book=ExcelService::buildTemplate($subjects,$exam);
         $tmp=tempnam(sys_get_temp_dir(),'xlsx'); (new Xlsx($book))->save($tmp);
-        $filename=$exam?'result-template-class-'.$exam->class_name.'-'.$exam->exam_year.'.xlsx':'result-template.xlsx';
+        $filename=$exam?preg_replace('/[^A-Za-z0-9._-]+/','-','result-template-class-'.$exam->class_name.'-'.$exam->exam_year.'.xlsx'):'result-template.xlsx';
         return response()->download($tmp,$filename)->deleteFileAfterSend(true);
     }
 
