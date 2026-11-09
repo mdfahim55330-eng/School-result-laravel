@@ -225,8 +225,8 @@ class ApiController
         return $existing;
     }
     public function bulkPreview(Request $r) {
-        $r->validate(['excelFile'=>'required|file|mimes:xlsx|max:5120']);
-        try { $sheet=ExcelService::readSheet($r->file('excelFile'),3000); }
+        $r->validate(['excelFile'=>'required|file|mimes:xlsx|max:'.(config('school.upload_max_mb',5)*1024)]);
+        try { $sheet=ExcelService::readSheet($r->file('excelFile'),config('school.upload_max_rows',3000)); }
         catch(\Throwable $e) { return $this->fail($e->getMessage()); }
         $rawRows=array_map(fn($row)=>array_diff_key($row,['__row'=>true]),$sheet['rows']);
         $response=['success'=>true,'total_rows'=>count($rawRows),'columns'=>$sheet['columns'],'rows'=>$rawRows];
@@ -243,7 +243,7 @@ class ApiController
         return response()->json($response);
     }
     public function bulkImport(Request $r) {
-        $r->validate(['excelFile'=>'required|file|mimes:xlsx|max:5120','exam_id'=>'required|integer']);
+        $r->validate(['excelFile'=>'required|file|mimes:xlsx|max:'.(config('school.upload_max_mb',5)*1024),'exam_id'=>'required|integer']);
         $exam=$this->exam($r->input('exam_id')); if(!$exam)return $this->fail('Exam not found.',404);
         $subjects=$this->subjectsFor($exam->class_name); if(!$subjects->count())return $this->fail('No subjects found for class '.$exam->class_name.'.');
         try {
