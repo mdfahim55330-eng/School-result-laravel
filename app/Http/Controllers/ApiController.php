@@ -93,7 +93,7 @@ class ApiController
         if($x=$this->admin($r))return $x;
         $v=$r->validate(['class_name'=>'required|string|max:50','subject_name'=>'required|string|max:150','subject_code'=>'required|string|max:30','full_marks'=>'required|integer|min:1|max:1000','subject_type'=>'nullable|in:main,fourth']);
         if(DB::table('subjects')->where('class_name',$v['class_name'])->where('subject_code',$v['subject_code'])->exists())return $this->fail('This subject already exists for this class.');
-        $id=DB::table('subjects')->insertGetId($v+['subject_type'=>$v['subject_type']??'main','created_at'=>now(),'updated_at'=>now()]);
+        $id=DB::table('subjects')->insertGetId(array_merge($v,['subject_type'=>$v['subject_type']??'main','created_at'=>now(),'updated_at'=>now()]));
         $this->audit($r,'subject_created','subject',$id,'Added subject '.$v['subject_name'],$v); return $this->ok('Subject added successfully.',['id'=>$id]);
     }
     public function deleteSubject(Request $r,$id) {
@@ -195,7 +195,7 @@ class ApiController
         $rows=DB::table('students')->where($v)->where('status','published')->get();if(!$rows->count())return null;if($rows->count()>1)return false;return $rows->first();
     }
     public function publicSearch(Request $r) { $s=$this->findPublished($r); if($s===false)return $this->fail('More than one result was found for this roll. Please contact the school office.',409); if(!$s)return $this->fail('Result not found or result has not been published.',404); $data=$this->resultData($s); $data['verify_url']=$this->verifyUrl($s->id); $data['qr']=$this->qrData($data['verify_url']); return response()->json(['success'=>true]+$data); }
-    public function publicPdf(Request $r) { $s=$this->findPublished($r); if(!$s)return $this->fail('Result not found or result has not been published.',404); $d=$this->resultData($s); $d['verify_url']=$this->verifyUrl($s->id); $d['qr']=$this->qrData($d['verify_url']); return Pdf::loadView('marksheet-pdf',$d)->setPaper('a4')->stream('marksheet-'.$s->roll.'-'.$s->exam_year.'.pdf'); }
+    public function publicPdf(Request $r) { $s=$this->findPublished($r); if($s===false)return $this->fail('More than one result was found for this roll. Please contact the school office.',409); if(!$s)return $this->fail('Result not found or result has not been published.',404); $d=$this->resultData($s); $d['verify_url']=$this->verifyUrl($s->id); $d['qr']=$this->qrData($d['verify_url']); return Pdf::loadView('marksheet-pdf',$d)->setPaper('a4')->stream('marksheet-'.$s->roll.'-'.$s->exam_year.'.pdf'); }
     public function classPdf(Request $r) { $d=$this->report($r); $items=array_values(array_filter($d['students'],fn($s)=>$r->query('status','published')==='all'||$s['status']==='published')); if(!$items)return $this->fail('No published results found for this selection.',404); if(count($items)>600)return $this->fail('Too many students for one PDF. Please choose a smaller group.'); $pages=[]; foreach($items as $item){$s=DB::table('students')->where('id',$item['id'])->first();$page=$this->resultData($s);$page['verify_url']=$this->verifyUrl($s->id);$page['qr']=$this->qrData($page['verify_url']);$pages[]=$page;} return Pdf::loadView('class-marksheets',['pages'=>$pages])->setPaper('a4')->stream('class-marksheets.pdf'); }
 
     // Users and audit
