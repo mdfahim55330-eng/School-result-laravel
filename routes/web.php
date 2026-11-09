@@ -1,15 +1,45 @@
 <?php
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ApiController as API;
 use App\Http\Middleware\StaffAuth;
+
 Route::get('/', fn () => redirect('/index.html'));
+
+// Match the original Express page guard: staff pages require an active session,
+// and the Users page is restricted to administrators.
+Route::get('/pages/{page}.html', function (Request $request, string $page) {
+    $userId = $request->session()->get('admin_id');
+    $user = $userId ? DB::table('admins')->where('id', $userId)->first() : null;
+
+    if (!$user || !$user->active) {
+        if ($userId) $request->session()->invalidate();
+        return redirect('/pages/admin-login.html');
+    }
+
+    if ($user->must_change_password) {
+        return redirect('/pages/change-password.html');
+    }
+
+    if ($page === 'users' && $user->role !== 'admin') {
+        return redirect('/pages/admin.html');
+    }
+
+    return response()->file(public_path('pages/'.$page.'.html'), [
+        'Cache-Control' => 'no-store',
+    ]);
+})->where('page', 'admin|classes|subjects|exams|individual-result|result-list|bulk-result|merit-list|tabulation|statistics|users');
+
 Route::get('/healthz', [API::class, 'health']);
 Route::get('/verify/{id}/{sig}', [API::class, 'verifyResult'])->middleware('throttle:60,1');
+
 Route::prefix('api')->group(function () {
     Route::get('/result/options', [API::class, 'publicOptions'])->middleware('throttle:60,1');
     Route::get('/result/search', [API::class, 'publicSearch'])->middleware('throttle:60,1');
     Route::get('/result/marksheet.pdf', [API::class, 'publicPdf'])->middleware('throttle:10,1');
-    
+
     Route::prefix('admin')->group(function () {
         Route::post('/login', [API::class, 'login'])->middleware('throttle:10,15');
         Route::get('/me', [API::class, 'me']);
