@@ -192,7 +192,7 @@ class ExcelService
         foreach($headers as $i=>$header)$example->getColumnDimension(Coordinate::stringFromColumnIndex($i+1))->setWidth($i===0?28:max(12,mb_strlen((string)$header)+2));
         $help=$book->createSheet(); $help->setTitle('Instructions');
         $lines=['How to fill this file',$exam?'Exam: '.$exam->exam_name.' - Class '.$exam->class_name.' - '.$exam->exam_year:'This is a generic demo. Download again after choosing an exam to get the real subject columns.','1. Enter students in the Data sheet, one student per row, starting at row 2. Do not rename or delete column headings.','2. Name and Roll are required. Registration and Group are optional.','3. Every normal subject column needs marks from 0 to the subject full marks. Fourth subject can be blank.','4. The Example sheet is only an example. Only the first Data sheet is imported.','5. Save as .xlsx (Excel Workbook).'];
-        foreach($lines as $line)$help->fromArray([$line],null,'A'.($help->getHighestRow()+1));
+        $lineNo=1; foreach($lines as $line){$help->setCellValue('A'.$lineNo,$line);$lineNo++;}
         $help->getRowDimension(1)->setRowHeight(24); $help->getStyle('A1')->getFont()->setBold(true)->setSize(14); $help->getColumnDimension('A')->setWidth(110);
         return $book;
     }
