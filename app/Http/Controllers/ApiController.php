@@ -220,13 +220,13 @@ class ApiController
         $headers=array_map(fn($x)=>trim((string)$x),array_shift($rows));$out=[];foreach($rows as $index=>$row){$x=['__row'=>$index+2];foreach($headers as $col=>$name)if($name!=='')$x[$name]=$row[$col]??null;if(array_filter($x,fn($v,$k)=>$k!=='__row'&&$v!==null&&$v!=='',ARRAY_FILTER_USE_BOTH))$out[]=$x;}
         return ['columns'=>array_values(array_filter($headers)),'rows'=>$out];
     }
-    private function excelRows($file,$exam,$mode='skip'): array {
+    private function excelRows($file,$exam,$mode='skip',$lockPublished=false): array {
         $sheet=$this->readExcel($file);$subs=$this->subjectsFor($exam->class_name);$out=[];$created=0;$updated=0;$failed=0;
         foreach($sheet['rows'] as $row){$name=$row['Name']??$row['Student Name']??'';$roll=trim((string)($row['Roll']??$row['Roll No']??''));$errs=[];$marks=[];
             if(trim((string)$name)==='')$errs[]='Student name is required.';if($roll==='')$errs[]='Roll is required.';
             foreach($subs as $s){$value=$row[$s->subject_code]??$row[$s->subject_name]??null;if($value===''||$value===null){if($s->subject_type!=='fourth')$errs[]=$s->subject_name.' marks are required.';continue;}$marks[]=['subject_id'=>$s->id,'marks'=>$value];}
             $old=DB::table('students')->where(['class_name'=>$exam->class_name,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'roll'=>$roll])->first();
-            if($old&&$mode!=='update')$errs[]='Duplicate roll already exists.';
+            if($old&&$mode!=='update')$errs[]='Duplicate roll already exists.'; if($old&&$lockPublished&&$old->status==='published')$errs[]='Published results can only be updated by an admin.';
             try{$graded=$marks?GradingService::process($subs,$marks):null;}catch(\\Throwable $e){$errs[]=$e->getMessage();$graded=null;}
             $valid=!$errs&&$graded;$out[]=['row'=>$row['__row'],'name'=>$name,'roll'=>$roll,'valid'=>(bool)$valid,'state'=>$old?'update':'create','errors'=>$errs,'gpa'=>$graded['final']['gpa']??null,'grade'=>$graded['final']['grade']??null,'result'=>$graded['final']['status']??null,'marks'=>$graded['rows']??[],'existing_id'=>$old->id??null,'registration'=>$row['Registration']??'','group_name'=>$row['Group']??''];
             if($valid){if($old)$updated++;else$created++;}else$failed++;
@@ -236,12 +236,12 @@ class ApiController
     public function bulkPreview(Request $r) {
         $r->validate(['excelFile'=>'required|file|mimes:xlsx|max:5120']);$file=$r->file('excelFile');$examId=(int)$r->input('exam_id');
         if(!$examId){$s=$this->readExcel($file);return response()->json(['success'=>true,'total_rows'=>count($s['rows']),'columns'=>$s['columns'],'rows'=>$s['rows']]);}
-        $exam=$this->exam($examId);if(!$exam)return $this->fail('Exam not found.',404);$a=$this->excelRows($file,$exam,$r->input('duplicate_mode','skip'));
+        $exam=$this->exam($examId);if(!$exam)return $this->fail('Exam not found.',404);$a=$this->excelRows($file,$exam,$r->input('duplicate_mode','skip'),$this->staff($r)->role!=='admin');
         return response()->json(['success'=>true,'total_rows'=>count($a['rows']),'columns'=>$a['sheet']['columns'],'rows'=>array_map(fn($x)=>array_diff_key($x,['marks'=>true,'existing_id'=>true]),$a['rows']),'exam'=>['id'=>$exam->id,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'class_name'=>$exam->class_name],'counts'=>$a['counts'],'analysis'=>$a['rows']]);
     }
     public function bulkImport(Request $r) {
         $r->validate(['excelFile'=>'required|file|mimes:xlsx|max:5120','exam_id'=>'required|integer']);$exam=$this->exam($r->input('exam_id'));if(!$exam)return $this->fail('Exam not found.',404);
-        $a=$this->excelRows($r->file('excelFile'),$exam,$r->input('duplicate_mode','skip'));$u=$this->staff($r);$publish=$u->role==='admin'&&strtolower((string)$r->input('publish','true'))!=='false';$created=0;$updated=0;
+        $a=$this->excelRows($r->file('excelFile'),$exam,$r->input('duplicate_mode','skip'),$this->staff($r)->role!=='admin');$u=$this->staff($r);$publish=$u->role==='admin'&&strtolower((string)$r->input('publish','true'))!=='false';$created=0;$updated=0;
         DB::transaction(function()use($a,$exam,$publish,&$created,&$updated){foreach($a['rows'] as $x){if(!$x['valid'])continue;$st=DB::table('students')->where('id',$x['existing_id'])->first();if($st){DB::table('students')->where('id',$st->id)->update(['name'=>$x['name'],'registration'=>$x['registration'],'group_name'=>$x['group_name'],'final_gpa'=>$x['gpa'],'final_grade'=>$x['grade'],'result_status'=>$x['result'],'status'=>$publish?'published':$st->status,'updated_at'=>now()]);$this->saveRows($st->id,$x['marks']);$updated++;}else{$id=DB::table('students')->insertGetId(['name'=>$x['name'],'roll'=>$x['roll'],'registration'=>$x['registration'],'group_name'=>$x['group_name'],'class_name'=>$exam->class_name,'exam_name'=>$exam->exam_name,'exam_year'=>$exam->exam_year,'final_gpa'=>$x['gpa'],'final_grade'=>$x['grade'],'result_status'=>$x['result'],'status'=>$publish?'published':'draft','created_at'=>now(),'updated_at'=>now()]);$this->saveRows($id,$x['marks']);$created++;}}});
         $errors=[];foreach($a['rows'] as $x)if(!$x['valid'])$errors[]=['row'=>$x['row'],'name'=>$x['name'],'roll'=>$x['roll'],'error'=>implode(' ',$x['errors'])];
         $this->audit($r,'bulk_import','exam',$exam->id,'Excel import: '.$created.' new, '.$updated.' updated, '.count($errors).' not imported',['created'=>$created,'updated'=>$updated,'failed'=>count($errors)]);
