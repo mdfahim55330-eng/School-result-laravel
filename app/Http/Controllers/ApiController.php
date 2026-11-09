@@ -31,9 +31,9 @@ class ApiController
     }
     private function ok(string $message='OK',array $extra=[]){return response()->json(array_merge(['success'=>true,'message'=>$message],$extra));}
     private function fail(string $message,int $status=400){return response()->json(['success'=>false,'message'=>$message],$status);}
-    private function school(): array { return ['name'=>env('SCHOOL_NAME','Shaheed Nur Hossain Memorial School'),'address'=>env('SCHOOL_ADDRESS','Biral, Dinajpur'),'eiin'=>env('SCHOOL_EIIN','')]; }
+    private function school(): array { return ['name'=>config('school.name'),'address'=>config('school.address'),'eiin'=>config('school.eiin')]; }
     private function verifyUrl($id): string {
-        $secret = env('VERIFY_SECRET', config('app.key'));
+        $secret = config('school.verify_secret') ?: config('app.key');
         $sig = hash_hmac('sha256', (string)$id, (string)$secret);
         return URL::to('/verify/'.$id.'/'.$sig);
     }
@@ -274,7 +274,7 @@ class ApiController
     public function exportXlsx(Request $r) { if($x=$this->admin($r))return $x; $d=$this->report($r);$book=new Spreadsheet();$ws=$book->getActiveSheet();$head=['Position','Roll','Name','Registration','Group'];foreach($d['subjects'] as $s)$head[]=$s['subject_name'].' ('.$s['subject_code'].')';array_push($head,'Total Marks','GPA','Grade','Result','Status');$ws->fromArray($head,null,'A1');foreach($d['students'] as $s){$x=[$s['position']??'',$s['roll'],$s['name'],$s['registration'],$s['group_name']];foreach($d['subjects'] as $sub)$x[]=$s['marks'][$sub['id']]??'';array_push($x,$s['total_marks'],$s['final_gpa'],$s['final_grade'],$s['result_status'],$s['status']);$ws->fromArray($x,null,'A'.($ws->getHighestRow()+1));}$ws->getStyle('1:1')->getFont()->setBold(true);$ws->freezePane('D2');$tmp=tempnam(sys_get_temp_dir(),'xlsx');(new Xlsx($book))->save($tmp);$this->audit($r,'export','exam',null,'Exported Excel');return response()->download($tmp,'results.xlsx')->deleteFileAfterSend(true);}
     public function backup(Request $r) {if($x=$this->admin($r))return $x;$data=['app'=>'school-result-system','version'=>2,'created_at'=>now()->toIso8601String()];foreach(['exams','subjects','students','results'] as $t)$data[$t]=DB::table($t)->orderBy('id')->get();$data['counts']=array_map(fn($t)=>count($data[$t]),['exams','subjects','students','results']);$this->audit($r,'backup','system',null,'Downloaded backup');return response()->json($data)->header('Content-Disposition','attachment; filename="result-backup-'.now()->format('Y-m-d').'.json"');}
     public function verifyResult($id,$sig) {
-        $expected=hash_hmac('sha256',(string)$id,(string)env('VERIFY_SECRET',config('app.key')));
+        $expected=hash_hmac('sha256',(string)$id,(string)(config('school.verify_secret') ?: config('app.key')));
         if(!ctype_digit((string)$id)||!hash_equals($expected,(string)$sig)) return response('<h2>Verification link is not valid.</h2>',404)->header('Content-Type','text/html');
         $s=DB::table('students')->where('id',$id)->where('status','published')->first();
         if(!$s) return response('<h2>This result is not available or has been withdrawn.</h2>',404)->header('Content-Type','text/html');
