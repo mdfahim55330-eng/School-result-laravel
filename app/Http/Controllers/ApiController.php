@@ -228,12 +228,12 @@ class ApiController
     public function statistics(Request $r) {$d=$this->report($r);return response()->json(['success'=>true]+ReportService::statistics($d));}
 
     // Public result search and printable marksheet
-    public function publicOptions() {$rows=DB::table('students')->where('status','published')->select('class_name','exam_name','exam_year')->groupBy('class_name','exam_name','exam_year')->orderBy('class_name')->orderByDesc('exam_year')->get();return response()->json(['success'=>true,'options'=>$rows]);}
+    public function publicOptions() {$rows=DB::table('students')->where('status','published')->select('class_name','exam_name','exam_year')->groupBy('class_name','exam_name','exam_year')->orderBy('class_name')->orderByDesc('exam_year')->get();return response()->json(['success'=>true,'options'=>$rows])->header('Cache-Control','private, max-age=30');}
     private function findPublished(Request $r) {
         $v=$r->validate(['roll'=>'required|string|max:50','class_name'=>'required|string|max:50','exam_name'=>'required|string|max:150','exam_year'=>'required|integer']);
         $rows=DB::table('students')->where($v)->where('status','published')->get();if(!$rows->count())return null;if($rows->count()>1)return false;return $rows->first();
     }
-    public function publicSearch(Request $r) { $s=$this->findPublished($r); if($s===false)return $this->fail('More than one result was found for this roll. Please contact the school office.',409); if(!$s)return $this->fail('Result not found or result has not been published.',404); $data=$this->resultData($s); $data['verify_url']=$this->verifyUrl($r,$s->id); $data['qr']=$this->qrData($data['verify_url']); return response()->json(['success'=>true]+$data); }
+    public function publicSearch(Request $r) { $s=$this->findPublished($r); if($s===false)return $this->fail('More than one result was found for this roll. Please contact the school office.',409); if(!$s)return $this->fail('Result not found or result has not been published.',404); $data=$this->resultData($s); $data['verify_url']=$this->verifyUrl($r,$s->id); $data['qr']=$this->qrData($data['verify_url']); return response()->json(['success'=>true]+$data)->header('Cache-Control','private, max-age=30'); }
     public function publicPdf(Request $r) { $s=$this->findPublished($r); if($s===false)return $this->fail('More than one result was found for this roll. Please contact the school office.',409); if(!$s)return $this->fail('Result not found or result has not been published.',404); $d=$this->resultData($s); $d['verify_url']=$this->verifyUrl($r,$s->id); $d['qr']=$this->qrData($d['verify_url']); $filename=preg_replace('/[^A-Za-z0-9._-]+/','-','marksheet-'.$s->roll.'-'.$s->exam_year.'.pdf'); return Pdf::loadView('marksheet-pdf',$d)->setPaper('a4')->stream($filename); }
     public function classPdf(Request $r) { $d=$this->report($r); $items=array_values(array_filter($d['students'],fn($s)=>$r->query('status','published')==='all'||$s['status']==='published')); if(!$items)return $this->fail('No published results found for this selection.',404); if(count($items)>600)return $this->fail('Too many students for one PDF. Please choose a smaller group.'); $pages=[]; foreach($items as $item){$s=DB::table('students')->where('id',$item['id'])->first();$page=$this->resultData($s,$item['position']??'-');$page['verify_url']=$this->verifyUrl($r,$s->id);$page['qr']=$this->qrData($page['verify_url']);$pages[]=$page;} $filename=preg_replace('/[^A-Za-z0-9._-]+/','-','marksheets-class-'.$d['meta']['class_name'].'-'.$d['meta']['exam_year'].'.pdf'); return Pdf::loadView('class-marksheets',['pages'=>$pages])->setPaper('a4')->stream($filename); }
 
@@ -369,11 +369,11 @@ class ApiController
     public function backup(Request $r) {if($x=$this->admin($r))return $x;$data=['app'=>'school-result-system','version'=>2,'created_at'=>now()->toIso8601String()];foreach(['exams','subjects','students','results'] as $t)$data[$t]=DB::table($t)->orderBy('id')->get();$data['counts']=['exams'=>count($data['exams']),'subjects'=>count($data['subjects']),'students'=>count($data['students']),'results'=>count($data['results'])];$this->audit($r,'backup','system',null,'Downloaded backup ('.count($data['students']).' students)');return response()->json($data)->header('Content-Disposition','attachment; filename="result-backup-'.now()->format('Y-m-d').'.json"');}
     public function verifyResult($id,$sig) {
         $expected=$this->verifySignature($id);
-        if(!ctype_digit((string)$id)||!hash_equals($expected,(string)$sig)) return response('<h2>Verification link is not valid.</h2>',404)->header('Content-Type','text/html');
+        if(!ctype_digit((string)$id)||!hash_equals($expected,(string)$sig)) return response('<h2>Verification link is not valid.</h2>',404)->header('Content-Type','text/html')->header('Cache-Control','no-store')->header('X-Robots-Tag','noindex');
         $s=DB::table('students')->where('id',$id)->where('status','published')->first();
-        if(!$s) return response('<h2>This result is not available or has been withdrawn.</h2>',404)->header('Content-Type','text/html');
+        if(!$s) return response('<h2>This result is not available or has been withdrawn.</h2>',404)->header('Content-Type','text/html')->header('Cache-Control','no-store')->header('X-Robots-Tag','noindex');
         $d=$this->resultData($s);
-        return response()->view('verify-result',['data'=>$d],200)->header('X-Robots-Tag','noindex');
+        return response()->view('verify-result',['data'=>$d],200)->header('Cache-Control','no-store')->header('X-Robots-Tag','noindex');
     }
     public function health() {try{DB::select('SELECT 1');return response()->json(['ok'=>true]);}catch(\Throwable $e){return response()->json(['ok'=>false],503);}}
 }
