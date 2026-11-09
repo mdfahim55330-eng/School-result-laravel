@@ -54,7 +54,7 @@ class ReportService
             $list=array_values(array_filter($list,fn($s)=>$s['group_name']===$wanted));
         }
         $ranked=array_values(array_filter($list,fn($s)=>$s['result_status']==='Pass'));
-        $mode=strtolower(env('MERIT_MODE','marks'))==='gpa'?'gpa':'marks';
+        $mode=config('school.merit_mode','marks');
         usort($ranked,function($a,$b) use($mode) {
             if($mode==='gpa' && round($a['final_gpa'],2)!==round($b['final_gpa'],2)) return $b['final_gpa'] <=> $a['final_gpa'];
             if(round($a['total_marks'],2)!==round($b['total_marks'],2)) return $b['total_marks'] <=> $a['total_marks'];
