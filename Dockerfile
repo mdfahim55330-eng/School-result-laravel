@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y git unzip libzip-dev libicu-dev libpng-
  && a2enmod rewrite headers && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public PORT=10000
-RUN sed -ri 's!/var/www/html!\${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+RUN sed -ri 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 WORKDIR /var/www/html
 COPY . .
 RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
