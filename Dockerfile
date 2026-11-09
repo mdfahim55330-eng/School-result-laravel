@@ -1,5 +1,5 @@
 FROM php:8.3-apache
-RUN apt-get update && apt-get install -y git unzip libzip-dev libicu-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev default-mysql-client \
+RUN apt-get update && apt-get install -y git unzip libzip-dev libicu-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libonig-dev default-mysql-client \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
  && docker-php-ext-install pdo_mysql mbstring bcmath exif gd zip intl opcache \
  && a2enmod rewrite headers && rm -rf /var/lib/apt/lists/*
