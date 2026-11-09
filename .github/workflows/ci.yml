@@ -1,0 +1,26 @@
+name: Laravel CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_mysql, gd, zip, intl, xml, dom, simplexml
+          coverage: none
+      - uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.json') }}
+          restore-keys: ${{ runner.os }}-composer-
+      - run: composer validate --no-check-publish
+      - run: composer install --no-interaction --prefer-dist
+      - name: PHP syntax check
+        run: find app bootstrap config database public routes resources -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: php artisan route:list
