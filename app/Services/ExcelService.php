@@ -177,6 +177,7 @@ class ExcelService
 
     public static function buildTemplate($subjects=null,$exam=null): Spreadsheet
     {
+        if($subjects && $subjects instanceof \\Illuminate\\Support\\Collection) $subjects=$subjects->all();
         $book=new Spreadsheet(); $book->getProperties()->setCreator('School Result System');
         $hasSubjects=$subjects && count($subjects)>0;
         $subjectHeaders=$hasSubjects?array_map(fn($s)=>$s->subject_name.' ('.$s->subject_code.')',$subjects):['Bangla (101)','English (107)','Mathematics (109)'];
